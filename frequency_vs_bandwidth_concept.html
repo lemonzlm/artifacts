@@ -1,0 +1,157 @@
+<style>
+*{box-sizing:border-box}
+.ctrl{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13px;color:var(--color-text-secondary)}
+.ctrl label{min-width:100px;font-weight:500;color:var(--color-text-primary)}
+.ctrl input[type=range]{flex:1}
+.ctrl .v{min-width:72px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--color-text-info)}
+.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:10px 0}
+.card{padding:10px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary);text-align:center}
+.card .num{font-size:18px;font-weight:500;font-family:var(--font-mono)}
+.card .lbl{font-size:11px;color:var(--color-text-secondary);margin-top:3px}
+canvas{display:block;width:100%;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);margin-top:8px}
+.anno{font-size:12px;color:var(--color-text-secondary);margin-top:6px;line-height:1.6}
+.anno span{font-family:var(--font-mono);font-size:11px}
+</style>
+
+<div class="ctrl">
+  <label>载波频率 f_c</label>
+  <input type="range" id="sl-fc" min="100" max="900" value="500" step="10">
+  <span class="v" id="v-fc">500 MHz</span>
+</div>
+<div class="ctrl">
+  <label>带宽 B</label>
+  <input type="range" id="sl-bw" min="10" max="400" value="100" step="10">
+  <span class="v" id="v-bw">100 MHz</span>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="num" id="c-fl" style="color:#185FA5">450</div>
+    <div class="lbl">f_low = f_c − B/2（MHz）</div>
+  </div>
+  <div class="card">
+    <div class="num" id="c-fc" style="color:#854F0B">500</div>
+    <div class="lbl">f_c 载波频率（MHz）</div>
+  </div>
+  <div class="card">
+    <div class="num" id="c-fh" style="color:#185FA5">550</div>
+    <div class="lbl">f_high = f_c + B/2（MHz）</div>
+  </div>
+</div>
+
+<canvas id="cv" height="220"></canvas>
+
+<div class="anno" id="anno-text"></div>
+
+<script>
+(function(){
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+const DPR=devicePixelRatio||1;
+
+function resize(){
+  const w=cv.parentElement.clientWidth||600;
+  cv.width=w*DPR; cv.height=220*DPR; cv.style.height='220px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function dk(){return matchMedia('(prefers-color-scheme:dark)').matches;}
+
+function draw(){
+  resize();
+  const W=cv.parentElement.clientWidth||600, H=220;
+  const isDk=dk();
+  const textC=isDk?'#c2c0b6':'#3d3d3a';
+  const dimC=isDk?'rgba(194,192,182,0.12)':'rgba(61,61,58,0.1)';
+  const axC=isDk?'rgba(194,192,182,0.35)':'rgba(61,61,58,0.28)';
+  const blueC='#185FA5', amberC='#854F0B', tealC='#0F6E56';
+  const blueF=isDk?'rgba(24,95,165,0.22)':'rgba(24,95,165,0.13)';
+
+  ctx.clearRect(0,0,W,H);
+
+  const fc=+document.getElementById('sl-fc').value;
+  const bw=+document.getElementById('sl-bw').value;
+  const fl=fc-bw/2, fh=fc+bw/2;
+
+  document.getElementById('v-fc').textContent=fc+' MHz';
+  document.getElementById('v-bw').textContent=bw+' MHz';
+  document.getElementById('c-fl').textContent=fl.toFixed(0);
+  document.getElementById('c-fc').textContent=fc;
+  document.getElementById('c-fh').textContent=fh.toFixed(0);
+
+  const fMin=0, fMax=1000;
+  const padL=48, padR=24, padT=30, padB=52;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+
+  function fToX(f){return padL+(f-fMin)/(fMax-fMin)*plotW;}
+
+  ctx.fillStyle=isDk?'rgba(255,255,255,0.015)':'rgba(0,0,0,0.015)';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle=dimC; ctx.lineWidth=0.5;
+  for(let f=100;f<=900;f+=100){
+    const x=fToX(f);
+    ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+plotH); ctx.stroke();
+  }
+
+  ctx.strokeStyle=axC; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(padL,padT+plotH); ctx.lineTo(padL+plotW,padT+plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(padL,padT+plotH); ctx.lineTo(padL,padT); ctx.stroke();
+
+  for(let f=0;f<=1000;f+=100){
+    const x=fToX(f);
+    ctx.fillStyle=textC; ctx.font='10px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(f,x,padT+plotH+14);
+  }
+  ctx.fillStyle=textC; ctx.font='11px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('频率 f（MHz）→',padL+plotW-120,padT+plotH+28);
+
+  const xlF=fToX(fl), xcF=fToX(fc), xhF=fToX(fh);
+  const barY=padT+plotH*0.18, barH=plotH*0.55;
+
+  ctx.fillStyle=blueF;
+  ctx.fillRect(xlF, barY, xhF-xlF, barH);
+  ctx.strokeStyle=blueC; ctx.lineWidth=1.5;
+  ctx.strokeRect(xlF, barY, xhF-xlF, barH);
+
+  const bwArrowY=barY+barH+14;
+  ctx.strokeStyle=blueC; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(xlF+3,bwArrowY); ctx.lineTo(xhF-3,bwArrowY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xlF+3,bwArrowY-4); ctx.lineTo(xlF,bwArrowY); ctx.lineTo(xlF+3,bwArrowY+4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xhF-3,bwArrowY-4); ctx.lineTo(xhF,bwArrowY); ctx.lineTo(xhF-3,bwArrowY+4); ctx.stroke();
+  ctx.fillStyle=blueC; ctx.font='500 11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('B = '+bw+' MHz（带宽 = 频率范围的宽度）',(xlF+xhF)/2,bwArrowY+14);
+
+  ctx.strokeStyle=amberC; ctx.lineWidth=2.5; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(xcF,barY-6); ctx.lineTo(xcF,barY+barH+6); ctx.stroke();
+  ctx.fillStyle=amberC;
+  ctx.beginPath(); ctx.arc(xcF,barY-8,5,0,Math.PI*2); ctx.fill();
+  ctx.font='500 11px sans-serif'; ctx.textAlign='center';
+  const fcLabelX=xcF+(xcF>W/2?-58:58);
+  ctx.fillText('f_c = '+fc+' MHz'  ,fcLabelX, barY-10);
+  ctx.font='10px sans-serif';
+  ctx.fillText('（载波：一个点）',fcLabelX,barY+2);
+
+  ctx.strokeStyle=tealC; ctx.lineWidth=1.2; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(xlF,barY-2); ctx.lineTo(xlF,padT+plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xhF,barY-2); ctx.lineTo(xhF,padT+plotH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=tealC; ctx.font='10px sans-serif';
+  ctx.textAlign='center'; ctx.fillText('f_low = '+fl.toFixed(0),xlF,barY-6);
+  ctx.textAlign='center'; ctx.fillText('f_high = '+fh.toFixed(0),xhF,barY-6);
+
+  ctx.fillStyle=textC; ctx.font='11px sans-serif'; ctx.textAlign='right';
+  ctx.fillText('能量',padL-4,padT+12);
+
+  document.getElementById('anno-text').innerHTML =
+    '<b>T = 1/f_c</b> 描述的是载波本身的振荡周期，这里是 <span>T = 1/'+fc+'MHz ≈ '+
+    (1000/fc).toFixed(2)+' ns</span>。它是频率轴上的一个<b>点</b>的属性。<br>'+
+    '<b>B = f_high − f_low = '+bw+' MHz</b> 是信号占据的频率范围宽度，是两个点之间的<b>距离</b>，'+
+    '与载波在哪里无关——你可以把整个蓝色方块平移到任意位置，B 不变。';
+}
+
+['sl-fc','sl-bw'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',draw);
+draw();
+})();
+</script>

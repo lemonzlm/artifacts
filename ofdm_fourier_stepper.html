@@ -1,112 +1,118 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OFDM 与傅里叶变换 — 交互式演示</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;padding:20px;background:#fff;color:#3d3d3a;max-width:800px;margin:0 auto}
-h1{font-size:18px;font-weight:500;margin-bottom:16px;color:#2c2c2a}
-.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-.tab{padding:5px 16px;border-radius:20px;font-size:13px;border:1px solid #ccc;background:#fff;color:#666;cursor:pointer;transition:all .15s}
-.tab:hover{background:#f5f5f5}
-.tab.on{background:#e6f1fb;border-color:#185FA5;color:#185FA5;font-weight:500}
-.desc{font-size:13px;line-height:1.65;padding:8px 12px;border-left:2px solid #185FA5;background:#e6f1fb;color:#0C447C;border-radius:0 6px 6px 0;margin-bottom:10px}
-.formula{text-align:center;font-family:monospace;font-size:12px;color:#666;margin:4px 0 8px;padding:5px 10px;background:#f5f5f5;border-radius:4px}
-.ctrl{display:flex;align-items:center;gap:10px;margin:4px 0;font-size:13px;color:#666}
-.ctrl label{min-width:110px;font-weight:500;color:#3d3d3a}
-.ctrl input[type=range]{flex:1;accent-color:#185FA5}
-.ctrl .v{min-width:70px;text-align:right;font-family:monospace;font-size:12px;color:#185FA5}
-canvas{display:block;width:100%;border-radius:6px;border:1px solid #e0e0e0;margin:6px 0;background:#fafafa}
-footer{margin-top:16px;font-size:11px;color:#aaa;text-align:center}
+*{box-sizing:border-box}
+.steps{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.step-btn{padding:5px 12px;border-radius:20px;font-size:12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+.step-btn:hover{background:var(--color-background-secondary)}
+.step-btn.active{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info);font-weight:500}
+.desc{font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;padding:8px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-info);border-radius:0 var(--border-radius-md) var(--border-radius-md) 0;color:var(--color-text-info);line-height:1.6}
+canvas{display:block;width:100%;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary)}
+.ctrl{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13px;color:var(--color-text-secondary)}
+.ctrl label{min-width:110px;font-weight:500;color:var(--color-text-primary)}
+.ctrl input[type=range]{flex:1}
+.ctrl .v{min-width:60px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--color-text-info)}
+.formula{text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--color-text-secondary);margin:8px 0;padding:6px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)}
 </style>
-</head>
-<body>
-<h1>OFDM 与傅里叶变换</h1>
-<div class="tabs" id="step-btns">
-  <button class="tab on" data-s="0">① 纯音 = 一根针</button>
-  <button class="tab" data-s="1">② 正交 = 互不干扰</button>
-  <button class="tab" data-s="2">③ 多子载波叠加</button>
-  <button class="tab" data-s="3">④ 频谱图视角</button>
-  <button class="tab" data-s="4">⑤ OFDM = IDFT/DFT</button>
+
+<div class="steps" id="step-btns">
+  <button class="step-btn active" data-s="0">① 纯音 = 一根针</button>
+  <button class="step-btn" data-s="1">② 正交 = 互不干扰</button>
+  <button class="step-btn" data-s="2">③ 多子载波叠加</button>
+  <button class="step-btn" data-s="3">④ 频谱图视角</button>
+  <button class="step-btn" data-s="4">⑤ OFDM = IDFT/DFT</button>
 </div>
+
 <div class="desc" id="desc-text"></div>
 <div class="formula" id="formula-text"></div>
+
 <div id="ctrl-area"></div>
 <canvas id="cv" height="260"></canvas>
-<footer>拖动滑块可实时调整参数 · 点击步骤标签切换视图</footer>
 
 <script>
 (function(){
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
+const DPR=devicePixelRatio||1;
 let step=0;
 const COLS=['#185FA5','#0F6E56','#854F0B','#993C1D','#534AB7','#72243E','#3B6D11'];
 
-const DESCS=[
+const descs=[
   '一个纯音就是单一频率的正弦波，持续无限长时间。它在频谱上是一根无限细的针——位置是 f，宽度是 0。这是 T=1/f 所描述的世界，没有带宽概念。',
-  '两个频率 f₁ 和 f₂=kf₁ 的正弦波在一个周期 T 内相乘再积分，结果为 0——这就是"正交"。正交意味着：它们互相"看不见"对方，接收时可以完全独立解调，即使在同一频段内共存。',
-  'OFDM 把多个正交子载波叠加在一起，每条子载波独立携带数据。合成波形看起来很复杂，但接收端只需用对应频率做相关运算（乘以该子载波再积分），就能精确还原——正是正交性保证了零串扰。',
-  '在频谱视角下，每条子载波的频谱是 sinc 形状（因为持续时间有限）。关键在于：相邻子载波的间隔精确等于 1/T，使得每条 sinc 的波峰恰好落在其他所有 sinc 的零点上——互不重叠，紧密排列，频率利用率极高。',
-  'OFDM 发射端本质是在执行 IDFT：把 N 个数据符号（频域）变换成时域信号。接收端执行 DFT（FFT）：把时域信号变回频域，每个频率点的值就是对应子载波的数据。整个过程就是傅里叶变换的往返。'
+  '两个频率 f₁ 和 f₂=2f₁ 的正弦波在一个周期 T 内相乘再积分，结果为 0——这就是"正交"。正交意味着：它们互相"看不见"对方，接收时可以完全独立解调，即使在同一频段内共存。',
+  'OFDM 把多个正交子载波叠加在一起，每条子载波独立携带数据。叠加后的合成波形看起来很复杂，但接收端只需用对应频率做相关运算（乘以该子载波再积分），就能精确还原每条子载波的数据——正是因为正交性保证了零串扰。',
+  '在频谱视角下，每条子载波的频谱是 sinc 形状（因为持续时间有限）。关键在于：相邻子载波的间隔精确等于 1/T，这使得每条 sinc 的波峰恰好落在其他所有 sinc 的零点上——互相不重叠，但又紧密排列，频率利用率极高。',
+  'OFDM 发射端本质上是在执行 IDFT：把 N 个数据符号（频域）变换成时域信号，每个符号对应一条子载波。接收端执行 DFT（FFT）：把时域信号变换回频域，每个频率点的值就是对应子载波的数据。整个过程就是一次傅里叶变换的往返。'
 ];
-
-const FORMULAS=[
+const formulas=[
   'x(t) = A · sin(2π f₁ t)        频率轴上：一个点',
-  '∫₀ᵀ sin(2π·1·t)·sin(2π·k·t) dt = 0        正交条件（k 为不同整数）',
+  '∫₀ᵀ sin(2π·1·t)·sin(2π·2·t) dt = 0        正交条件',
   'x(t) = Σₖ aₖ · sin(2π·k·Δf·t)        多子载波叠加',
-  '子载波间隔 Δf = 1/T  →  相邻 sinc 零点对齐  →  无干扰',
-  'IDFT: xₙ = Σₖ Xₖ·e^(j2πkn/N)        DFT: Xₖ = Σₙ xₙ·e^(-j2πkn/N)'
+  '子载波间隔 Δf = 1/T  →  相邻sinc零点对齐  →  无干扰',
+  'IDFT: xₙ = Σₖ Xₖ·e^(j2πkn/N)   DFT: Xₖ = Σₙ xₙ·e^(-j2πkn/N)'
 ];
 
-document.querySelectorAll('.tab').forEach(b=>{
+document.querySelectorAll('.step-btn').forEach(b=>{
   b.addEventListener('click',()=>{
     step=+b.dataset.s;
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
-    b.classList.add('on');
-    document.getElementById('desc-text').textContent=DESCS[step];
-    document.getElementById('formula-text').textContent=FORMULAS[step];
+    document.querySelectorAll('.step-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('desc-text').textContent=descs[step];
+    document.getElementById('formula-text').textContent=formulas[step];
     buildControls();
     draw();
   });
 });
-document.getElementById('desc-text').textContent=DESCS[0];
-document.getElementById('formula-text').textContent=FORMULAS[0];
 
-let slFreq=3, slN=4, slOrthoSel=2;
+document.getElementById('desc-text').textContent=descs[0];
+document.getElementById('formula-text').textContent=formulas[0];
+
+let slFreq=3, slN=4, slSel=1, slOrthoSel=2;
 
 function buildControls(){
   const area=document.getElementById('ctrl-area');
   area.innerHTML='';
   if(step===0){
-    area.innerHTML=`<div class="ctrl"><label>频率 f</label><input type="range" id="sl-f" min="1" max="8" value="${slFreq}" step="1"><span class="v" id="v-f">${slFreq} Hz</span></div>`;
+    area.innerHTML=`
+    <div class="ctrl"><label>频率 f</label>
+    <input type="range" id="sl-f" min="1" max="8" value="${slFreq}" step="1">
+    <span class="v" id="v-f">${slFreq} Hz</span></div>`;
     document.getElementById('sl-f').addEventListener('input',e=>{slFreq=+e.target.value;document.getElementById('v-f').textContent=slFreq+' Hz';draw();});
   }
   if(step===1){
-    area.innerHTML=`<div class="ctrl"><label>子载波 k</label><input type="range" id="sl-o" min="2" max="6" value="${slOrthoSel}" step="1"><span class="v" id="v-o">k = ${slOrthoSel}</span></div>`;
-    document.getElementById('sl-o').addEventListener('input',e=>{slOrthoSel=+e.target.value;document.getElementById('v-o').textContent='k = '+slOrthoSel;draw();});
+    area.innerHTML=`
+    <div class="ctrl"><label>子载波 k 选择</label>
+    <input type="range" id="sl-o" min="2" max="5" value="${slOrthoSel}" step="1">
+    <span class="v" id="v-o">k=${slOrthoSel}</span></div>`;
+    document.getElementById('sl-o').addEventListener('input',e=>{slOrthoSel=+e.target.value;document.getElementById('v-o').textContent='k='+slOrthoSel;draw();});
   }
   if(step===2){
-    area.innerHTML=`<div class="ctrl"><label>子载波数量 N</label><input type="range" id="sl-n" min="2" max="7" value="${slN}" step="1"><span class="v" id="v-n">${slN}</span></div>`;
+    area.innerHTML=`
+    <div class="ctrl"><label>子载波数量 N</label>
+    <input type="range" id="sl-n" min="2" max="6" value="${slN}" step="1">
+    <span class="v" id="v-n">${slN}</span></div>`;
     document.getElementById('sl-n').addEventListener('input',e=>{slN=+e.target.value;document.getElementById('v-n').textContent=slN;draw();});
   }
 }
+
 buildControls();
 
-function sinc(x){return Math.abs(x)<1e-9?1:Math.sin(Math.PI*x)/(Math.PI*x);}
-
 function resize(){
-  const w=cv.parentElement.clientWidth||700;
-  cv.width=w; cv.height=260; cv.style.height='260px';
+  const w=cv.parentElement.clientWidth||600;
+  cv.width=w*DPR; cv.height=260*DPR; cv.style.height='260px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
 }
+
+function dk(){return matchMedia('(prefers-color-scheme:dark)').matches;}
 
 function draw(){
   resize();
-  const W=cv.width, H=260;
-  const textC='#3d3d3a', dimC='rgba(61,61,58,0.08)', axC='rgba(61,61,58,0.25)';
+  const W=cv.parentElement.clientWidth||600, H=260;
+  const isDk=dk();
+  const textC=isDk?'#c2c0b6':'#3d3d3a';
+  const dimC=isDk?'rgba(194,192,182,0.1)':'rgba(61,61,58,0.08)';
+  const axC=isDk?'rgba(194,192,182,0.3)':'rgba(61,61,58,0.25)';
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#fafafa'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=isDk?'rgba(255,255,255,0.015)':'rgba(0,0,0,0.01)';
+  ctx.fillRect(0,0,W,H);
 
   const pad={l:44,r:16,t:20,b:32};
   const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
@@ -124,16 +130,17 @@ function draw(){
   }
 
   function txt(t,x,y,align,c){
-    ctx.fillStyle=c||textC; ctx.font='10px system-ui,sans-serif';
+    ctx.fillStyle=c||textC; ctx.font='10px var(--font-sans,sans-serif)';
     ctx.textAlign=align||'center'; ctx.fillText(t,x,y);
   }
 
-  function drawSine(k,color,alpha,yc,amp){
+  function drawSine(k,color,alpha,yc,amp,xRange){
+    const x0=xRange?xRange[0]:0, x1=xRange?xRange[1]:pw;
     ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.globalAlpha=alpha||1;
     ctx.beginPath();
     for(let i=0;i<=300;i++){
-      const px=pl+(i/300)*pw;
-      const t=(px-pl)/pw*2;
+      const px=pl+x0+(i/300)*(x1-x0);
+      const t=((px-pl)/pw)*2;
       const y=yc-Math.sin(2*Math.PI*k*t)*amp;
       i===0?ctx.moveTo(px,y):ctx.lineTo(px,y);
     }
@@ -143,50 +150,57 @@ function draw(){
   if(step===0){
     const yc=pt+ph/2, amp=ph*0.38;
     axis(yc);
-    drawSine(slFreq,COLS[0],1,yc,amp);
-    ctx.strokeStyle=axC; ctx.lineWidth=0.7; ctx.setLineDash([4,3]);
+    ctx.strokeStyle=axC; ctx.lineWidth=0.6; ctx.setLineDash([3,3]);
     ctx.beginPath(); ctx.moveTo(pl+pw/slFreq,pt); ctx.lineTo(pl+pw/slFreq,pb); ctx.stroke();
     ctx.setLineDash([]);
+    drawSine(slFreq,COLS[0],1,yc,amp);
     txt('t →',pl+pw+4,pb+4,'left');
-    txt('T = 1/'+slFreq+' s',pl+pw/(slFreq*2),pt+14,'center',COLS[0]);
-    txt('f = '+slFreq+' Hz  →  频谱上一个点',pl+pw*0.65,yc-amp-10,'center',COLS[0]);
+    txt('x(t)',pl-6,pt+8,'right');
+    txt('T = 1/'+slFreq+' s',pl+pw/slFreq,pt+14,'center',COLS[0]);
     txt('0',pl,pb+12); txt('1s',pl+pw/2,pb+12); txt('2s',pl+pw,pb+12);
+    txt('f = '+slFreq+' Hz',pl+pw*0.7,yc-amp-10,'center',COLS[0]);
   }
 
   if(step===1){
     const half=ph/2-8;
-    const yc1=pt+half/2+4, yc2=pt+half+16+half/2, amp=half*0.38;
+    const yc1=pt+half/2+4, yc2=pt+half+16+half/2;
+    const amp=half*0.38;
     axis(yc1);
     ctx.strokeStyle=axC; ctx.lineWidth=0.9;
     ctx.beginPath(); ctx.moveTo(pl,yc2); ctx.lineTo(pl+pw,yc2); ctx.stroke();
     drawSine(1,COLS[0],1,yc1,amp);
     drawSine(slOrthoSel,COLS[2],1,yc2,amp);
-    txt('f₁ = 1 Hz',pl+20,yc1-amp-6,'left',COLS[0]);
-    txt('f₂ = '+slOrthoSel+' Hz  (k='+slOrthoSel+')',pl+20,yc2-amp-6,'left',COLS[2]);
+    txt('f₁ = 1Hz',pl+20,yc1-amp-6,'left',COLS[0]);
+    txt('f₂ = '+slOrthoSel+'Hz（k='+slOrthoSel+'）',pl+20,yc2-amp-6,'left',COLS[2]);
 
-    const steps=400; let sum=0; const integral=[];
+    const steps=400, integral=[];
+    let sum=0;
     for(let i=0;i<=steps;i++){
       const t=(i/steps)*2;
       const v=Math.sin(2*Math.PI*1*t)*Math.sin(2*Math.PI*slOrthoSel*t);
-      sum+=v*(2/steps); integral.push(sum);
+      sum+=v*(2/steps);
+      integral.push(sum);
     }
-    ctx.strokeStyle='#3B6D11'; ctx.lineWidth=1.2; ctx.setLineDash([5,3]);
+    ctx.strokeStyle='#639922'; ctx.lineWidth=1.2; ctx.setLineDash([5,3]);
     ctx.beginPath();
     for(let i=0;i<=steps;i++){
       const px=pl+(i/steps)*pw;
-      const py=yc2-integral[i]*amp*1.4;
+      const py=yc2-integral[i]*amp*1.2;
       i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
     }
     ctx.stroke(); ctx.setLineDash([]);
-    txt('∫ f₁·f₂ dt → '+sum.toFixed(3)+' ≈ 0',pl+pw*0.65,yc2+amp*0.5,'center','#3B6D11');
-    txt('t →',pl+pw+4,yc2+16,'left');
+    const finalVal=sum.toFixed(3);
+    txt('∫ f₁·f₂ dt → '+finalVal+' ≈ 0',pl+pw*0.65,yc2+amp*0.3,'center','#3B6D11');
+    txt('t →',pl+pw+4,yc2+16,'left'); txt('0',pl,yc1+half+28); txt('2s',pl+pw,yc1+half+28);
   }
 
   if(step===2){
     const yc=pt+ph/2, amp=ph/(slN+1)*0.8;
     axis(yc);
-    for(let k=1;k<=slN;k++) drawSine(k,COLS[(k-1)%COLS.length],0.4,yc,amp);
-    ctx.strokeStyle='#2c2c2a'; ctx.lineWidth=2.2;
+    for(let k=1;k<=slN;k++){
+      drawSine(k,COLS[(k-1)%COLS.length],0.45,yc,amp);
+    }
+    ctx.strokeStyle=isDk?'#e8e6dc':'#2c2c2a'; ctx.lineWidth=2.2; ctx.globalAlpha=1;
     ctx.beginPath();
     for(let i=0;i<=400;i++){
       const px=pl+(i/400)*pw;
@@ -196,84 +210,110 @@ function draw(){
       i===0?ctx.moveTo(px,y):ctx.lineTo(px,y);
     }
     ctx.stroke();
-    txt('合成波形（粗黑线）= '+slN+' 条子载波叠加',pl+pw*0.5,pt+12,'center',textC);
-    txt('0',pl,pb+12); txt('1s',pl+pw/2,pb+12); txt('2s',pl+pw,pb+12);
     txt('t →',pl+pw+4,pb+4,'left');
+    txt('合成波形（粗线）',pl+pw*0.5,pt+12,'center',textC);
+    for(let k=1;k<=Math.min(slN,4);k++){
+      txt('f'+k,pl+pw*0.03,yc-(amp*1.1)+(k-1)*12,'left',COLS[(k-1)%COLS.length]);
+    }
+    txt('0',pl,pb+12); txt('2s',pl+pw,pb+12);
   }
 
   if(step===3){
-    const N=6, fMax=N+1;
-    axis(pb);
+    const N=6, T=1;
+    const yc=pt+ph*0.5, amp=ph*0.35;
+    axis(yc);
+    const fMax=N+1;
     function fToX(f){return pl+f/fMax*pw;}
+
+    ctx.strokeStyle=axC; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(pl,pb); ctx.lineTo(pl+pw,pb); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pl,pt+2); ctx.lineTo(pl,pb); ctx.stroke();
+
+    function sinc(x){return Math.abs(x)<1e-9?1:Math.sin(Math.PI*x)/(Math.PI*x);}
+
     for(let k=1;k<=N;k++){
-      ctx.strokeStyle=COLS[(k-1)%COLS.length]; ctx.lineWidth=1.5; ctx.globalAlpha=0.78;
+      const cx=fToX(k);
+      ctx.strokeStyle=COLS[(k-1)%COLS.length]; ctx.lineWidth=1.4; ctx.globalAlpha=0.75;
       ctx.beginPath();
       for(let i=0;i<=300;i++){
         const f=i/300*fMax;
         const px=fToX(f);
-        const y=pb-Math.max(-0.4,sinc((f-k)))*ph*0.35;
+        const y=pb-Math.max(-0.4,sinc((f-k)*T))*amp;
         i===0?ctx.moveTo(px,y):ctx.lineTo(px,y);
       }
       ctx.stroke(); ctx.globalAlpha=1;
-      const cx=fToX(k), dotY=pb-ph*0.35;
+
+      ctx.strokeStyle=COLS[(k-1)%COLS.length]; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(cx,pb); ctx.lineTo(cx,pb-amp-10); ctx.stroke();
+      ctx.setLineDash([]);
+      txt('f'+k,cx,pb+12,'center',COLS[(k-1)%COLS.length]);
+
+      const dotY=pb-amp;
       ctx.fillStyle=COLS[(k-1)%COLS.length];
       ctx.beginPath(); ctx.arc(cx,dotY,4,0,Math.PI*2); ctx.fill();
-      txt('f'+k,cx,pb+12,'center',COLS[(k-1)%COLS.length]);
     }
+
     txt('频率 f →',pl+pw+4,pb+4,'left',textC);
+    txt('相邻间隔 = 1/T',pl+fToX(1.5)-pl,pt+14,'center','#854F0B');
     ctx.strokeStyle='#854F0B'; ctx.lineWidth=1.2;
-    const ax=fToX(1)+3, bx=fToX(2)-3, ay=pt+22;
+    const ax=fToX(1)+3,bx=fToX(2)-3,ay=pt+24;
     ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,ay); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(ax+4,ay-4); ctx.lineTo(ax,ay); ctx.lineTo(ax+4,ay+4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(bx-4,ay-4); ctx.lineTo(bx,ay); ctx.lineTo(bx-4,ay+4); ctx.stroke();
-    txt('间隔 = 1/T（sinc零点对齐）',fToX(1.5),ay-6,'center','#854F0B');
+    ctx.beginPath(); ctx.moveTo(ax,ay-4); ctx.lineTo(ax-1,ay); ctx.lineTo(ax,ay+4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx,ay-4); ctx.lineTo(bx+1,ay); ctx.lineTo(bx,ay+4); ctx.stroke();
   }
 
   if(step===4){
-    const N=8, data=[1,0,-1,1,-1,0,1,-1];
-    const leftW=pw*0.42, midW=pw*0.16, rightW=pw*0.42;
-    const spacing=ph/(N+1), barH=spacing*0.7, yTop=pt+22;
+    const N=8;
+    const data=[1,0,-1,1,-1,0,1,-1];
+    const colors=data.map((v,i)=>v>0?COLS[0]:v<0?COLS[3]:COLS[5]);
+
+    const leftW=pw*0.42, rightW=pw*0.42, midW=pw*0.16;
+    const barH=ph/(N+1)*0.7, spacing=ph/(N+1);
 
     ctx.strokeStyle=axC; ctx.lineWidth=0.7;
     ctx.beginPath(); ctx.moveTo(pl+leftW,pt); ctx.lineTo(pl+leftW,pb); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(pl+leftW+midW,pt); ctx.lineTo(pl+leftW+midW,pb); ctx.stroke();
 
-    txt('频域 Xₖ（数据符号）',pl+leftW*0.5,pt+10,'center',textC);
-    txt('IDFT↓  /  DFT↑',pl+leftW+midW*0.5,pt+ph*0.5,'center','#854F0B');
-    txt('时域 xₙ（发射波形）',pl+leftW+midW+rightW*0.5,pt+10,'center',textC);
+    txt('频域 Xₖ（数据）',pl+leftW*0.5,pt+10,'center',textC);
+    txt('IDFT↓ / DFT↑',pl+leftW+midW*0.5,pt+ph*0.5,'center','#854F0B');
+    txt('时域 xₙ（发射）',pl+leftW+midW+rightW*0.5,pt+10,'center',textC);
 
+    const yTop=pt+22;
     for(let k=0;k<N;k++){
       const y=yTop+k*spacing+spacing/2;
-      const bLen=Math.abs(data[k])*leftW*0.55;
+      const barLen=Math.abs(data[k])*leftW*0.55;
       const cx=pl+leftW*0.5;
-      ctx.fillStyle=data[k]>0?COLS[0]:data[k]<0?COLS[3]:COLS[5];
-      ctx.globalAlpha=0.8;
-      ctx.fillRect(cx-bLen/2,y-barH/2,bLen,barH);
-      ctx.globalAlpha=1;
-      ctx.strokeStyle=data[k]>0?COLS[0]:data[k]<0?COLS[3]:COLS[5];
-      ctx.lineWidth=0.7; ctx.strokeRect(cx-bLen/2,y-barH/2,bLen,barH);
-      txt('X'+k+' = '+data[k],cx,y+3,'center',textC);
+      ctx.fillStyle=colors[k]; ctx.globalAlpha=0.8;
+      ctx.fillRect(cx-barLen/2,y-barH/2,barLen,barH);
+      ctx.globalAlpha=1; ctx.strokeStyle=colors[k]; ctx.lineWidth=0.8;
+      ctx.strokeRect(cx-barLen/2,y-barH/2,barLen,barH);
+      txt('X'+k+'='+data[k],cx,y+3,'center',isDk?'#c2c0b6':'#2c2c2a');
     }
 
     ctx.strokeStyle='#854F0B'; ctx.lineWidth=1.5;
+    const arX=pl+leftW+midW*0.5;
     [0.3,0.5,0.7].forEach(f=>{
       const y=pt+ph*f;
       ctx.beginPath(); ctx.moveTo(pl+leftW+4,y); ctx.lineTo(pl+leftW+midW-4,y); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(pl+leftW+midW-8,y-4); ctx.lineTo(pl+leftW+midW-4,y); ctx.lineTo(pl+leftW+midW-8,y+4); ctx.stroke();
     });
+    txt('IDFT',arX,pt+ph*0.38,'center','#854F0B');
+    txt('(FFT)',arX,pt+ph*0.48,'center','#854F0B');
 
     const rBase=pl+leftW+midW;
-    ctx.strokeStyle=COLS[4]; ctx.lineWidth=2;
+    ctx.strokeStyle=isDk?'#7F77DD':'#534AB7'; ctx.lineWidth=1.8;
     ctx.beginPath();
     for(let i=0;i<=300;i++){
       const px=rBase+(i/300)*rightW;
       const t=i/300;
-      let s=0; for(let k=0;k<N;k++) s+=data[k]*Math.cos(2*Math.PI*k*t*2);
+      let s=0;
+      for(let k=0;k<N;k++) s+=data[k]*Math.cos(2*Math.PI*k*t*2);
       const y=yTop+ph*0.38-s*spacing*0.3;
       i===0?ctx.moveTo(px,y):ctx.lineTo(px,y);
     }
     ctx.stroke();
-    txt('← IDFT 输出，这就是空中传输的波形',rBase+6,pb+14,'left',COLS[4]);
+    txt('合成时域信号',rBase+rightW*0.5,pb+4,'center','#534AB7');
+    txt('（空中传输这个波形）',rBase+rightW*0.5,pb+14,'center',isDk?'rgba(194,192,182,0.5)':'rgba(61,61,58,0.4)');
   }
 }
 
@@ -281,5 +321,3 @@ window.addEventListener('resize',draw);
 draw();
 })();
 </script>
-</body>
-</html>

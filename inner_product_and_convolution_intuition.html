@@ -1,0 +1,375 @@
+<style>
+*{box-sizing:border-box}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab{padding:5px 16px;border-radius:20px;font-size:13px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer}
+.tab:hover{background:var(--color-background-secondary)}
+.tab.on{background:var(--color-background-info);border-color:var(--color-border-info);color:var(--color-text-info);font-weight:500}
+.desc{font-size:13px;line-height:1.65;padding:8px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-info);color:var(--color-text-info);border-radius:0 var(--border-radius-md) var(--border-radius-md) 0;margin-bottom:10px}
+.ctrl{display:flex;align-items:center;gap:10px;margin:4px 0;font-size:13px;color:var(--color-text-secondary)}
+.ctrl label{min-width:110px;font-weight:500;color:var(--color-text-primary)}
+.ctrl input[type=range]{flex:1}
+.ctrl .v{min-width:70px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--color-text-info)}
+.result-row{display:flex;gap:10px;margin:8px 0}
+.rcard{flex:1;padding:8px 12px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);text-align:center}
+.rcard .num{font-size:20px;font-weight:500;font-family:var(--font-mono)}
+.rcard .lbl{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+canvas{display:block;width:100%;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);margin:6px 0}
+</style>
+
+<div class="tabs">
+  <button class="tab on" data-t="0">① 乘法 + 积分（内积）</button>
+  <button class="tab" data-t="1">② 卷积（滑动内积）</button>
+  <button class="tab" data-t="2">③ 两者的关系</button>
+</div>
+<div class="desc" id="desc"></div>
+<div id="ctrl-area"></div>
+<div class="result-row" id="result-row" style="display:none"></div>
+<canvas id="cv" height="280"></canvas>
+
+<script>
+(function(){
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+const DPR=devicePixelRatio||1;
+let tab=0;
+
+const DESCS=[
+  '把两个信号逐点相乘，然后对全部时间求积分。结果是一个标量（单个数字）。就像向量点积 a·b，它回答的是：这两个信号在整体上有多"对齐"？用它来检测信号中是否含有某个特定频率——收音机调台就是这个原理。',
+  '把一个信号沿时间轴滑动，在每个位置做内积，把结果连成曲线。输出是一个新信号，描述"在时刻 t，两个信号的相似程度"。物理意象：回声——h(t) 是房间的冲激响应，x(t) 是你说话，输出就是混响后的声音。',
+  '卷积在时域是"滑动内积"，但傅里叶变换后它变成了频域的逐点相乘。这是信号处理最重要的桥梁：时域卷积 ↔ 频域乘法。滤波器在时域是卷积一个核，在频域只是乘以一个遮罩——两种视角，同一个操作。'
+];
+
+let slFreq=3, slShift=50, slSig=2;
+
+document.querySelectorAll('.tab').forEach(b=>{
+  b.addEventListener('click',()=>{
+    tab=+b.dataset.t;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('desc').textContent=DESCS[tab];
+    buildCtrls();
+    draw();
+  });
+});
+document.getElementById('desc').textContent=DESCS[0];
+
+function buildCtrls(){
+  const ca=document.getElementById('ctrl-area');
+  const rr=document.getElementById('result-row');
+  ca.innerHTML=''; rr.innerHTML=''; rr.style.display='none';
+
+  if(tab===0){
+    ca.innerHTML=`
+    <div class="ctrl"><label>参考信号频率 k</label>
+      <input type="range" id="sl-f" min="1" max="7" value="${slFreq}" step="1">
+      <span class="v" id="v-f">${slFreq} Hz</span></div>`;
+    document.getElementById('sl-f').addEventListener('input',e=>{
+      slFreq=+e.target.value;
+      document.getElementById('v-f').textContent=slFreq+' Hz';
+      draw();
+    });
+    rr.style.display='flex';
+    rr.innerHTML=`
+      <div class="rcard"><div class="num" id="r-integral" style="color:var(--color-text-info)">0.00</div><div class="lbl">∫ f(t)·g(t) dt</div></div>
+      <div class="rcard"><div class="num" id="r-judge">—</div><div class="lbl">判断结果</div></div>`;
+  }
+  if(tab===1){
+    ca.innerHTML=`
+    <div class="ctrl"><label>滑动位置 τ</label>
+      <input type="range" id="sl-s" min="0" max="100" value="${slShift}" step="1">
+      <span class="v" id="v-s">${(slShift/100*4-2).toFixed(2)}s</span></div>`;
+    document.getElementById('sl-s').addEventListener('input',e=>{
+      slShift=+e.target.value;
+      document.getElementById('v-s').textContent=((slShift/100*4-2)).toFixed(2)+'s';
+      draw();
+    });
+  }
+  if(tab===2){
+    ca.innerHTML=`
+    <div class="ctrl"><label>信号类型</label>
+      <input type="range" id="sl-sig" min="1" max="3" value="${slSig}" step="1">
+      <span class="v" id="v-sig">${['','低通滤波','高通滤波','带通滤波'][slSig]}</span></div>`;
+    document.getElementById('sl-sig').addEventListener('input',e=>{
+      slSig=+e.target.value;
+      document.getElementById('v-sig').textContent=['','低通滤波','高通滤波','带通滤波'][slSig];
+      draw();
+    });
+  }
+}
+buildCtrls();
+
+function resize(){
+  const w=cv.parentElement.clientWidth||600;
+  cv.width=w*DPR; cv.height=280*DPR; cv.style.height='280px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function dk(){return matchMedia('(prefers-color-scheme:dark)').matches;}
+
+const BLUE='#185FA5', TEAL='#0F6E56', AMBER='#854F0B', CORAL='#993C1D', PURP='#534AB7';
+
+function draw(){
+  resize();
+  const W=cv.parentElement.clientWidth||600, H=280;
+  const isDk=dk();
+  const textC=isDk?'#c2c0b6':'#3d3d3a';
+  const dimC=isDk?'rgba(194,192,182,0.09)':'rgba(61,61,58,0.07)';
+  const axC=isDk?'rgba(194,192,182,0.3)':'rgba(61,61,58,0.22)';
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=isDk?'rgba(255,255,255,0.012)':'rgba(0,0,0,0.01)';
+  ctx.fillRect(0,0,W,H);
+
+  const pad={l:40,r:14,t:18,b:28};
+
+  function mkPanel(x0,y0,w,h){
+    return {x0,y0,w,h,
+      toX(t,tMin,tMax){return x0+(t-tMin)/(tMax-tMin)*w;},
+      toY(v,amp){return y0+h/2-v*amp;}
+    };
+  }
+
+  function axes(p,tMin,tMax,label){
+    ctx.strokeStyle=dimC; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(p.x0,p.y0+p.h/4); ctx.lineTo(p.x0+p.w,p.y0+p.h/4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x0,p.y0+p.h*3/4); ctx.lineTo(p.x0+p.w,p.y0+p.h*3/4); ctx.stroke();
+    ctx.strokeStyle=axC; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.moveTo(p.x0,p.y0+p.h/2); ctx.lineTo(p.x0+p.w,p.y0+p.h/2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x0,p.y0); ctx.lineTo(p.x0,p.y0+p.h); ctx.stroke();
+    ctx.fillStyle=textC; ctx.font='10px sans-serif'; ctx.textAlign='center';
+    if(label) ctx.fillText(label,p.x0+p.w/2,p.y0-4);
+    ctx.textAlign='right';
+    ctx.fillText(tMin+'s',p.x0+4,p.y0+p.h+14);
+    ctx.textAlign='left';
+    ctx.fillText(tMax+'s',p.x0+p.w,p.y0+p.h+14);
+  }
+
+  function plotLine(p,fn,tMin,tMax,color,alpha,lw){
+    ctx.strokeStyle=color; ctx.lineWidth=lw||1.8; ctx.globalAlpha=alpha||1;
+    ctx.beginPath();
+    for(let i=0;i<=400;i++){
+      const t=tMin+(i/400)*(tMax-tMin);
+      const px=p.toX(t,tMin,tMax);
+      const py=p.toY(fn(t),p.h*0.38);
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+
+  function plotFill(p,fn,tMin,tMax,color,alpha){
+    ctx.fillStyle=color; ctx.globalAlpha=alpha||0.2;
+    ctx.beginPath();
+    ctx.moveTo(p.x0,p.y0+p.h/2);
+    for(let i=0;i<=400;i++){
+      const t=tMin+(i/400)*(tMax-tMin);
+      const px=p.toX(t,tMin,tMax);
+      const py=p.toY(fn(t),p.h*0.38);
+      ctx.lineTo(px,py);
+    }
+    ctx.lineTo(p.x0+p.w,p.y0+p.h/2);
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+  }
+
+  function lbl(text,x,y,align,color){
+    ctx.fillStyle=color||textC; ctx.font='500 11px sans-serif';
+    ctx.textAlign=align||'left'; ctx.fillText(text,x,y);
+  }
+
+  const sinc=(x)=>Math.abs(x)<1e-9?1:Math.sin(Math.PI*x)/(Math.PI*x);
+
+  if(tab===0){
+    const tMin=0, tMax=2;
+    const ph=H-pad.t-pad.b;
+    const p1=mkPanel(pad.l, pad.t, (W-pad.l-pad.r)*0.48, ph*0.42);
+    const p2=mkPanel(pad.l, pad.t+ph*0.46, (W-pad.l-pad.r)*0.48, ph*0.42);
+    const p3=mkPanel(pad.l+(W-pad.l-pad.r)*0.54, pad.t, (W-pad.l-pad.r)*0.46, ph*0.9);
+
+    const f=(t)=>Math.sin(2*Math.PI*3*t)+0.5*Math.sin(2*Math.PI*5*t);
+    const g=(t)=>Math.sin(2*Math.PI*slFreq*t);
+    const prod=(t)=>f(t)*g(t);
+
+    axes(p1,tMin,tMax,'信号 f(t)（含频率 3Hz + 5Hz）');
+    plotLine(p1,f,tMin,tMax,BLUE);
+    lbl('f(t)',p1.x0+6,p1.y0+12,'left',BLUE);
+
+    axes(p2,tMin,tMax,'参考信号 g(t)（频率 '+slFreq+'Hz）');
+    plotLine(p2,g,tMin,tMax,TEAL);
+    lbl('g(t)',p2.x0+6,p2.y0+12,'left',TEAL);
+
+    axes(p3,tMin,tMax,'f(t) × g(t)  →  积分求面积');
+    plotFill(p3,prod,tMin,tMax,AMBER,0.25);
+    plotLine(p3,prod,tMin,tMax,AMBER);
+
+    let integral=0;
+    const N=2000;
+    for(let i=0;i<N;i++){
+      const t=tMin+(i+0.5)/N*(tMax-tMin);
+      integral+=prod(t)*(tMax-tMin)/N;
+    }
+    lbl('f×g',p3.x0+6,p3.y0+12,'left',AMBER);
+
+    const absInt=Math.abs(integral);
+    document.getElementById('r-integral').textContent=integral.toFixed(3);
+    const isMatch=absInt>0.4;
+    const judgeEl=document.getElementById('r-judge');
+    judgeEl.textContent=isMatch?'检测到 '+slFreq+'Hz 成分':'无 '+slFreq+'Hz 成分';
+    judgeEl.style.color=isMatch?'var(--color-text-success)':'var(--color-text-secondary)';
+
+    ctx.fillStyle=axC; ctx.lineWidth=0.6;
+    ctx.beginPath(); ctx.moveTo(p3.x0,p3.y0+p3.h/2); ctx.lineTo(p3.x0+p3.w,p3.y0+p3.h/2); ctx.stroke();
+    lbl('∫ = '+integral.toFixed(3),p3.x0+p3.w/2,p3.y0+p3.h+14,'center',isMatch?TEAL:textC);
+
+    ctx.strokeStyle=axC; ctx.lineWidth=0.5; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(p1.x0+p1.w+8,pad.t); ctx.lineTo(p1.x0+p1.w+8,pad.t+ph*0.9); ctx.stroke();
+    ctx.setLineDash([]);
+    lbl('×',p1.x0+p1.w+14,p1.y0+p1.h+4,'left',textC);
+    lbl('∫dt →',p3.x0-18,p3.y0+p3.h/2+4,'right',AMBER);
+
+  } else if(tab===1){
+    const tMin=-2, tMax=2;
+    const tau=(slShift/100)*4-2;
+    const ph=H-pad.t-pad.b;
+    const rowH=ph*0.28, gap=ph*0.04;
+    const fullW=W-pad.l-pad.r;
+
+    const x=(t)=>Math.abs(t)<0.6?1:0;
+    const h=(t)=>t>=0&&t<1?Math.exp(-3*t):0;
+    const hFlipped=(t)=>h(-t);
+    const hShifted=(t)=>hFlipped(t-tau);
+    const prodFn=(t)=>x(t)*hShifted(t);
+
+    const p1=mkPanel(pad.l,pad.t,fullW,rowH);
+    const p2=mkPanel(pad.l,pad.t+rowH+gap,fullW,rowH);
+    const p3=mkPanel(pad.l,pad.t+(rowH+gap)*2,fullW,rowH);
+    const p4=mkPanel(pad.l,pad.t+(rowH+gap)*3,fullW,rowH*0.7);
+
+    axes(p1,tMin,tMax,'输入信号 x(t)（矩形脉冲）');
+    plotFill(p1,x,tMin,tMax,BLUE,0.18);
+    plotLine(p1,(t)=>x(t)>0?1:0,tMin,tMax,BLUE,1,1.8);
+    lbl('x(t)',p1.x0+6,p1.y0+12,'left',BLUE);
+
+    axes(p2,tMin,tMax,'冲激响应 h(τ) 翻转并移位 → h(τ-t) 在 t='+tau.toFixed(2)+'s');
+    plotFill(p2,hShifted,tMin,tMax,TEAL,0.18);
+    plotLine(p2,hShifted,tMin,tMax,TEAL);
+    ctx.strokeStyle=AMBER; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    const tx=p2.toX(tau,tMin,tMax);
+    ctx.beginPath(); ctx.moveTo(tx,p2.y0+2); ctx.lineTo(tx,p2.y0+p2.h); ctx.stroke();
+    ctx.setLineDash([]);
+    lbl('h(-t+τ)',p2.x0+6,p2.y0+12,'left',TEAL);
+    lbl('τ='+tau.toFixed(2),tx+3,p2.y0+14,'left',AMBER);
+
+    axes(p3,tMin,tMax,'乘积 x(t)·h(τ-t)  →  绿色面积 = 卷积值 (y*h)('+tau.toFixed(2)+')');
+    plotFill(p3,prodFn,tMin,tMax,'#639922',0.3);
+    plotLine(p3,prodFn,tMin,tMax,'#3B6D11');
+    let area=0;
+    for(let i=0;i<1000;i++){
+      const t=tMin+(i+0.5)/1000*(tMax-tMin);
+      area+=prodFn(t)*(tMax-tMin)/1000;
+    }
+    lbl('面积 = '+area.toFixed(3),p3.x0+p3.w*0.5,p3.y0+12,'center','#3B6D11');
+
+    axes(p4,tMin,tMax,'卷积输出 (x*h)(τ)');
+    ctx.strokeStyle=CORAL; ctx.lineWidth=2;
+    ctx.beginPath();
+    const N=400;
+    for(let i=0;i<=N;i++){
+      const t2=tMin+(i/N)*(tMax-tMin);
+      let s=0;
+      for(let j=0;j<500;j++){
+        const tt=tMin+(j+0.5)/500*(tMax-tMin);
+        s+=x(tt)*h(t2-tt)*(tMax-tMin)/500;
+      }
+      const px=p4.toX(t2,tMin,tMax);
+      const py=p4.toY(s,p4.h*0.45);
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+    const dotX=p4.toX(tau,tMin,tMax);
+    let dotVal=0;
+    for(let j=0;j<500;j++){const tt=tMin+(j+0.5)/500*(tMax-tMin);dotVal+=x(tt)*h(tau-tt)*(tMax-tMin)/500;}
+    const dotY=p4.toY(dotVal,p4.h*0.45);
+    ctx.fillStyle=AMBER; ctx.beginPath(); ctx.arc(dotX,dotY,5,0,Math.PI*2); ctx.fill();
+    lbl('← 滑动 τ，这个点就是卷积输出在 τ 处的值',p4.x0+6,p4.y0+p4.h+14,'left',AMBER);
+
+  } else {
+    const W2=W-pad.l-pad.r, ph=H-pad.t-pad.b;
+    const halfW=W2*0.48;
+    const p1=mkPanel(pad.l,pad.t,halfW,ph*0.42);
+    const p2=mkPanel(pad.l,pad.t+ph*0.52,halfW,ph*0.42);
+    const p3=mkPanel(pad.l+W2*0.54,pad.t,W2*0.46,ph*0.42);
+    const p4=mkPanel(pad.l+W2*0.54,pad.t+ph*0.52,W2*0.46,ph*0.42);
+
+    const tMin=0, tMax=4;
+    const sig=(t)=>{
+      let s=0;
+      for(let k=1;k<=8;k++) s+=Math.sin(2*Math.PI*k*t)/k;
+      return s;
+    };
+    const kernel={
+      1:(t)=>Math.abs(t)<0.5?1:0,
+      2:(t)=>t>=0&&t<0.4?1:0,
+      3:(t)=>Math.abs(t)<0.2?Math.cos(2*Math.PI*4*t):0,
+    }[slSig];
+    const kernelLabel=['','低通（宽矩形核）','高通（短脉冲核）','带通（调制核）'][slSig];
+    const kernelColor=[BLUE,TEAL,CORAL,PURP][slSig];
+
+    axes(p1,tMin,tMax,'输入信号（多频率叠加）');
+    plotLine(p1,sig,tMin,tMax,BLUE);
+
+    axes(p2,-1,1,'卷积核 h(t)（'+kernelLabel+'）');
+    plotLine(p2,kernel,-1,1,kernelColor);
+
+    axes(p3,tMin,tMax,'时域卷积结果 (x*h)(t)');
+    const convOut=(t)=>{
+      let s=0;
+      for(let j=0;j<200;j++){
+        const dt=0.02, tt=-2+j*dt;
+        s+=sig(t-tt)*kernel(tt)*dt;
+      }
+      return s;
+    };
+    ctx.strokeStyle=AMBER; ctx.lineWidth=1.8;
+    ctx.beginPath();
+    for(let i=0;i<=200;i++){
+      const t=tMin+(i/200)*(tMax-tMin);
+      const px=p3.toX(t,tMin,tMax);
+      const py=p3.toY(convOut(t),p3.h*0.38);
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+
+    const fRange=12;
+    const fftX=(f)=>p4.x0+(f/fRange)*p4.w;
+    axes(p4,0,fRange,'频域：时域卷积 = 频域相乘');
+    ctx.strokeStyle=BLUE; ctx.lineWidth=1.5; ctx.globalAlpha=0.6;
+    ctx.beginPath();
+    for(let k=1;k<=8;k++){
+      const fx=fftX(k); const fy=p4.y0+p4.h/2-p4.h*0.35/k;
+      ctx.beginPath(); ctx.moveTo(fx,p4.y0+p4.h/2); ctx.lineTo(fx,fy); ctx.stroke();
+      ctx.beginPath(); ctx.arc(fx,fy,3,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    const filterPass={1:(k)=>k<=2,2:(k)=>k>=5,3:(k)=>k===4||k===5}[slSig];
+    for(let k=1;k<=8;k++){
+      if(filterPass(k)){
+        const fx=fftX(k); const fy=p4.y0+p4.h/2-p4.h*0.35/k;
+        ctx.fillStyle=AMBER; ctx.globalAlpha=0.9;
+        ctx.beginPath(); ctx.arc(fx,fy,5,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha=1;
+      }
+    }
+    lbl('橙点 = 通过的频率',p4.x0+6,p4.y0+p4.h+14,'left',AMBER);
+
+    ctx.strokeStyle=axC; ctx.lineWidth=0.6; ctx.setLineDash([3,3]);
+    const midX=pad.l+halfW+10;
+    ctx.beginPath(); ctx.moveTo(midX,pad.t); ctx.lineTo(midX,pad.t+ph); ctx.stroke();
+    ctx.setLineDash([]);
+    lbl('时域',pad.l+halfW/2,pad.t-4,'center',textC);
+    lbl('频域等价',pad.l+W2*0.54+W2*0.23,pad.t-4,'center',textC);
+    lbl('⟺',midX,pad.t+ph/2,'center',AMBER);
+  }
+}
+
+window.addEventListener('resize',draw);
+draw();
+})();
+</script>

@@ -1,0 +1,201 @@
+<style>
+*{box-sizing:border-box}
+.srow{display:flex;align-items:center;gap:10px;margin:3px 0;font-size:13px}
+.srow label{width:130px;flex-shrink:0;font-weight:500}
+.srow input[type=range]{flex:1}
+.srow .v{width:30px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--color-text-info)}
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.plbl{font-size:11px;color:var(--color-text-secondary);margin-bottom:3px}
+canvas{display:block;width:100%;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary)}
+.preset-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+button{font-size:12px;padding:4px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+button:hover{background:var(--color-background-secondary)}
+button.active{border-color:var(--color-border-info);color:var(--color-text-info);background:var(--color-background-info)}
+</style>
+
+<div class="preset-row">
+  <span style="font-size:12px;color:var(--color-text-secondary);align-self:center">快速预设：</span>
+  <button id="btn-pure" class="active">纯音（1次谐波）</button>
+  <button id="btn-square">方波</button>
+  <button id="btn-saw">锯齿波</button>
+  <button id="btn-clear">清空</button>
+</div>
+
+<div id="sliders"></div>
+
+<div class="panels">
+  <div>
+    <div class="plbl">时域 — 各分量叠加后的合成波形</div>
+    <canvas id="cv-t" height="170"></canvas>
+  </div>
+  <div>
+    <div class="plbl">频域 — 傅里叶变换的结果（频谱）</div>
+    <canvas id="cv-f" height="170"></canvas>
+  </div>
+</div>
+
+<div style="margin-top:6px;font-size:11px;color:var(--color-text-tertiary)">
+  基频 f₁ = 1 Hz · 彩色细线 = 各谐波分量 · 白/黑粗线 = 叠加结果
+</div>
+
+<script>
+(function(){
+const COLS = ['#185FA5','#0F6E56','#854F0B','#993C1D','#534AB7','#72243E','#3C3489'];
+const LABELS = ['1st (f₁)','2nd (2f₁)','3rd (3f₁)','4th (4f₁)','5th (5f₁)','6th (6f₁)','7th (7f₁)'];
+const N = 7;
+const amps = [1,0,0,0,0,0,0];
+const slEls = [];
+
+const presets = {
+  'btn-pure':  [1,0,0,0,0,0,0],
+  'btn-square':[1,0,1/3,0,1/5,0,1/7],
+  'btn-saw':   [1,1/2,1/3,1/4,1/5,1/6,1/7],
+  'btn-clear': [0,0,0,0,0,0,0],
+};
+
+const slidersDiv = document.getElementById('sliders');
+for(let i=0;i<N;i++){
+  const row=document.createElement('div'); row.className='srow';
+  const lbl=document.createElement('label'); lbl.textContent=LABELS[i]; lbl.style.color=COLS[i];
+  const sl=document.createElement('input'); sl.type='range'; sl.min=0; sl.max=100; sl.step=1; sl.value=i===0?100:0;
+  const vl=document.createElement('span'); vl.className='v'; vl.textContent=i===0?'1.0':'0.0';
+  sl.addEventListener('input',()=>{
+    amps[i]=sl.value/100;
+    vl.textContent=amps[i].toFixed(1);
+    clearActive();
+    draw();
+  });
+  slEls.push({sl,vl});
+  row.appendChild(lbl); row.appendChild(sl); row.appendChild(vl);
+  slidersDiv.appendChild(row);
+}
+
+function clearActive(){document.querySelectorAll('button').forEach(b=>b.classList.remove('active'));}
+
+Object.keys(presets).forEach(id=>{
+  const btn=document.getElementById(id);
+  if(!btn) return;
+  btn.addEventListener('click',()=>{
+    const vals=presets[id];
+    vals.forEach((v,i)=>{
+      amps[i]=v;
+      slEls[i].sl.value=Math.round(v*100);
+      slEls[i].vl.textContent=v.toFixed(1);
+    });
+    clearActive(); btn.classList.add('active');
+    draw();
+  });
+});
+
+const cvT=document.getElementById('cv-t'), ctT=cvT.getContext('2d');
+const cvF=document.getElementById('cv-f'), ctF=cvF.getContext('2d');
+const DPR=devicePixelRatio||1;
+
+function resize(){
+  const wT=cvT.parentElement.clientWidth||320;
+  const wF=cvF.parentElement.clientWidth||320;
+  [[cvT,ctT,wT],[cvF,ctF,wF]].forEach(([cv,ct,w])=>{
+    cv.width=w*DPR; cv.height=170*DPR; cv.style.height='170px';
+    ct.setTransform(DPR,0,0,DPR,0,0);
+  });
+}
+
+function dk(){return matchMedia('(prefers-color-scheme:dark)').matches;}
+
+function draw(){
+  resize();
+  const isDk=dk();
+  const W=cvT.parentElement.clientWidth||320, H=170;
+  const Wf=cvF.parentElement.clientWidth||320;
+  const gridC=isDk?'rgba(194,192,182,0.09)':'rgba(61,61,58,0.07)';
+  const axC=isDk?'rgba(194,192,182,0.28)':'rgba(61,61,58,0.22)';
+  const compC=isDk?'#e8e6dc':'#2c2c2a';
+  const bgC=isDk?'rgba(194,192,182,0.03)':'rgba(61,61,58,0.025)';
+  const txtC=isDk?'#9c9a92':'#888780';
+
+  function panel(ct,w,fn){
+    ct.clearRect(0,0,w,H);
+    ct.fillStyle=bgC; ct.fillRect(0,0,w,H);
+    fn(ct,w);
+  }
+
+  panel(ctT,W,(ct,w)=>{
+    ct.strokeStyle=gridC; ct.lineWidth=0.5;
+    for(let i=1;i<4;i++){ct.beginPath();ct.moveTo(0,H*i/4);ct.lineTo(w,H*i/4);ct.stroke();}
+    for(let i=1;i<4;i++){ct.beginPath();ct.moveTo(w*i/4,0);ct.lineTo(w*i/4,H);ct.stroke();}
+    ct.strokeStyle=axC; ct.lineWidth=0.8;
+    ct.beginPath(); ct.moveTo(0,H/2); ct.lineTo(w,H/2); ct.stroke();
+
+    const maxA=amps.reduce((a,b)=>a+b,0)||1;
+    const scale=(H/2-14)/Math.max(maxA,1);
+
+    for(let i=0;i<N;i++){
+      if(amps[i]<0.005) continue;
+      ct.strokeStyle=COLS[i]; ct.lineWidth=1.2; ct.globalAlpha=0.35;
+      ct.beginPath();
+      for(let px=0;px<=w;px++){
+        const t=px/w*2;
+        const y=H/2-amps[i]*Math.sin(2*Math.PI*(i+1)*t)*scale;
+        px===0?ct.moveTo(px,y):ct.lineTo(px,y);
+      }
+      ct.stroke();
+    }
+    ct.globalAlpha=1;
+
+    ct.strokeStyle=compC; ct.lineWidth=2;
+    ct.beginPath();
+    for(let px=0;px<=w;px++){
+      const t=px/w*2;
+      let s=0;
+      for(let i=0;i<N;i++) s+=amps[i]*Math.sin(2*Math.PI*(i+1)*t);
+      const y=H/2-s*scale;
+      px===0?ct.moveTo(px,y):ct.lineTo(px,y);
+    }
+    ct.stroke();
+
+    ct.fillStyle=txtC; ct.font='10px sans-serif'; ct.textAlign='left';
+    ct.fillText('0s',2,H/2-3); ct.fillText('2s',w-20,H/2-3);
+  });
+
+  panel(ctF,Wf,(ct,w)=>{
+    const maxA=Math.max(...amps,0.01);
+    const padL=28, padR=14, padT=14, padB=22;
+    const plotW=w-padL-padR, plotH=H-padT-padB;
+
+    ct.strokeStyle=gridC; ct.lineWidth=0.5;
+    [0.25,0.5,0.75,1].forEach(f=>{
+      const y=padT+plotH*(1-f);
+      ct.beginPath(); ct.moveTo(padL,y); ct.lineTo(w-padR,y); ct.stroke();
+    });
+    ct.strokeStyle=axC; ct.lineWidth=0.8;
+    ct.beginPath(); ct.moveTo(padL,padT+plotH); ct.lineTo(w-padR,padT+plotH); ct.stroke();
+    ct.beginPath(); ct.moveTo(padL,padT); ct.lineTo(padL,padT+plotH); ct.stroke();
+
+    const barW=(plotW/N)*0.55;
+    const slotW=plotW/N;
+    for(let i=0;i<N;i++){
+      const cx=padL+slotW*i+slotW/2;
+      const bh=(amps[i]/maxA)*plotH;
+      if(bh>0.5){
+        ct.fillStyle=COLS[i]; ct.globalAlpha=0.82;
+        ct.fillRect(cx-barW/2, padT+plotH-bh, barW, bh);
+        ct.globalAlpha=1;
+      }
+      ct.fillStyle=txtC; ct.font='10px sans-serif'; ct.textAlign='center';
+      ct.fillText((i+1)+'f₁',cx,H-5);
+      if(amps[i]>0.04){
+        ct.fillStyle=COLS[i]; ct.font='500 10px sans-serif';
+        ct.fillText(amps[i].toFixed(2),cx,padT+plotH-bh-4);
+      }
+    }
+
+    ct.fillStyle=txtC; ct.font='10px sans-serif'; ct.textAlign='right';
+    ct.fillText(maxA.toFixed(1),padL-3,padT+4);
+    ct.fillText('0',padL-3,padT+plotH+3);
+  });
+}
+
+window.addEventListener('resize',draw);
+draw();
+})();
+</script>

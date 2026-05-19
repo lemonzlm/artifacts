@@ -1,0 +1,235 @@
+<style>
+*{box-sizing:border-box}
+.row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:13px;color:var(--color-text-secondary)}
+.row label{width:72px;font-weight:500;color:var(--color-text-primary);flex-shrink:0}
+.row input{flex:1}
+.row .v{width:90px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--color-text-info);flex-shrink:0}
+.pills{display:flex;gap:8px;margin:6px 0 2px;flex-wrap:wrap}
+.pill{padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500;border:1px solid}
+canvas{display:block;width:100%;margin-top:4px}
+</style>
+
+<div class="row">
+  <label>带宽 B</label>
+  <input type="range" id="r-bw" min="20" max="1500" value="100" step="10">
+  <span class="v" id="v-bw">100 MHz</span>
+</div>
+<div class="row">
+  <label>目标间距</label>
+  <input type="range" id="r-sep" min="10" max="500" value="200" step="5">
+  <span class="v" id="v-sep">2.00 m</span>
+</div>
+<div class="pills">
+  <span class="pill" id="p-tau" style="background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)">τ = 10 ns</span>
+  <span class="pill" id="p-res" style="background:var(--color-background-warning);color:var(--color-text-warning);border-color:var(--color-border-warning)">Δr = 150 cm</span>
+  <span class="pill" id="p-judge" style="background:var(--color-background-success);color:var(--color-text-success);border-color:var(--color-border-success)">可分辨</span>
+</div>
+<canvas id="c" height="420"></canvas>
+
+<script>
+(function(){
+const cv=document.getElementById('c');
+const cx=cv.getContext('2d');
+let W,H=420,DPR=devicePixelRatio||1;
+
+function resize(){
+  W=cv.parentElement.clientWidth||640;
+  cv.width=W*DPR; cv.height=H*DPR;
+  cv.style.height=H+'px';
+  cx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function sinc(x){return Math.abs(x)<1e-9?1:Math.sin(Math.PI*x)/(Math.PI*x)}
+
+function isDark(){return matchMedia('(prefers-color-scheme:dark)').matches}
+
+function col(light,dark){return isDark()?dark:light}
+
+function draw(){
+  resize();
+  cx.clearRect(0,0,W,H);
+
+  const bwMHz=+document.getElementById('r-bw').value;
+  const sepCm=+document.getElementById('r-sep').value;
+  const B=bwMHz*1e6;
+  const tau=1/B;
+  const resCm=3e8/(2*B)*100;
+  const sepM=sepCm/100;
+  const ok=sepCm>resCm*1.1;
+
+  document.getElementById('v-bw').textContent=bwMHz>=1000?(bwMHz/1000).toFixed(2)+' GHz':bwMHz+' MHz';
+  document.getElementById('v-sep').textContent=(sepM).toFixed(2)+' m';
+  document.getElementById('p-tau').textContent='τ = '+(tau*1e9).toFixed(2)+' ns';
+  document.getElementById('p-res').textContent='Δr = '+resCm.toFixed(1)+' cm';
+  const pj=document.getElementById('p-judge');
+  pj.textContent=ok?'两目标可分辨':'混叠，无法区分';
+  pj.style.background=ok?'var(--color-background-success)':'var(--color-background-danger)';
+  pj.style.color=ok?'var(--color-text-success)':'var(--color-text-danger)';
+  pj.style.borderColor=ok?'var(--color-border-success)':'var(--color-border-danger)';
+
+  const dk=isDark();
+  const textC=dk?'#c2c0b6':'#3d3d3a';
+  const dimC=dk?'rgba(194,192,182,0.22)':'rgba(61,61,58,0.18)';
+  const tealS=dk?'#5DCAA5':'#0F6E56';
+  const tealF=dk?'rgba(29,158,117,0.18)':'rgba(29,158,117,0.18)';
+  const coralS=dk?'#F0997B':'#993C1D';
+  const purpS=dk?'#7F77DD':'#534AB7';
+  const greenF=dk?'rgba(99,153,34,0.2)':'rgba(99,153,34,0.15)';
+  const redF=dk?'rgba(226,75,74,0.2)':'rgba(226,75,74,0.15)';
+
+  const pad=32;
+  const col1L=pad, col1R=W/2-8, col2L=W/2+8, col2R=W-pad;
+  const row1T=28, row1B=150;
+  const row2T=168, row2B=290;
+  const row3T=308, row3B=H-28;
+
+  function axis(x0,x1,y0,y1){
+    cx.strokeStyle=dimC; cx.lineWidth=0.8;
+    cx.beginPath(); cx.moveTo(x0,y0); cx.lineTo(x1,y0); cx.stroke();
+    cx.beginPath(); cx.moveTo(x0,y0); cx.lineTo(x0,y1); cx.stroke();
+  }
+
+  function tiny(t,x,y,align='center',c=textC){
+    cx.fillStyle=c; cx.font='10px var(--font-sans,sans-serif)';
+    cx.textAlign=align; cx.fillText(t,x,y);
+  }
+
+  function hdr(t,x,y){
+    cx.fillStyle=textC; cx.font='500 12px var(--font-sans,sans-serif)';
+    cx.textAlign='center'; cx.fillText(t,x,y);
+  }
+
+  const normB=(bwMHz-20)/(1500-20);
+
+  hdr('频域：带宽 B',(col1L+col1R)/2,row1T+2);
+  hdr('时域：脉冲宽度 τ = 1/B',(col2L+col2R)/2,row1T+2);
+
+  axis(col1L,col1R,row1B,row1T+16);
+  const fw=col1R-col1L, fmid=(col1L+col1R)/2;
+  const rectHW=Math.max(12, normB*(fw*0.42)+12);
+  cx.fillStyle=tealF; cx.strokeStyle=tealS; cx.lineWidth=1.5;
+  cx.beginPath(); cx.rect(fmid-rectHW,row1T+18,rectHW*2,row1B-row1T-22); cx.fill(); cx.stroke();
+  tiny('B = '+(bwMHz>=1000?(bwMHz/1000).toFixed(1)+'GHz':bwMHz+'MHz'),fmid,row1T+16,'center',tealS);
+
+  axis(col2L,col2R,row1B,row1T+16);
+  const tw=col2R-col2L, tmid=(col2L+col2R)/2;
+  const pulseHW=Math.max(5,(1-normB)*70+5);
+  cx.strokeStyle=purpS; cx.lineWidth=2;
+  cx.beginPath();
+  for(let i=0;i<=200;i++){
+    const px=col2L+(i/200)*tw;
+    const t=(px-tmid)/pulseHW;
+    const py=row1B-sinc(t)*sinc(t)*(row1B-row1T-24);
+    i===0?cx.moveTo(px,py):cx.lineTo(px,py);
+  }
+  cx.stroke();
+  tiny('τ ≈ '+(tau*1e9).toFixed(2)+' ns',tmid,row1T+16,'center',purpS);
+
+  const normSep=sepCm/resCm;
+  const sepPx=Math.min(tw*0.4, normSep*pulseHW*1.2);
+  const c1x=tmid-sepPx/2, c2x=tmid+sepPx/2;
+
+  hdr('回波叠加：两相邻目标（间距 '+sepCm+' cm）',(col1L+col1R)/2,row2T+2);
+  hdr('回波叠加：两相邻目标（同间距）',(col2L+col2R)/2,row2T+2);
+
+  function drawPair(ctr1,ctr2,xL,xR,yT,yB,ph,hw,colorA,colorB,colorC,showMarkers){
+    const amp=yB-yT-20;
+    cx.strokeStyle=colorA; cx.lineWidth=1.5; cx.globalAlpha=0.6;
+    cx.beginPath();
+    for(let i=0;i<=200;i++){const px=xL+(i/200)*(xR-xL);const t=(px-ctr1)/hw;const py=yB-sinc(t)*sinc(t)*amp;i===0?cx.moveTo(px,py):cx.lineTo(px,py);}
+    cx.stroke();
+    cx.strokeStyle=colorB; cx.globalAlpha=0.6;
+    cx.beginPath();
+    for(let i=0;i<=200;i++){const px=xL+(i/200)*(xR-xL);const t=(px-ctr2)/hw;const py=yB-sinc(t)*sinc(t)*amp;i===0?cx.moveTo(px,py):cx.lineTo(px,py);}
+    cx.stroke();
+    cx.strokeStyle=colorC; cx.lineWidth=2; cx.globalAlpha=1;
+    cx.beginPath();
+    for(let i=0;i<=200;i++){
+      const px=xL+(i/200)*(xR-xL);
+      const t1=(px-ctr1)/hw, t2=(px-ctr2)/hw;
+      const py=yB-(sinc(t1)*sinc(t1)+sinc(t2)*sinc(t2))*amp*0.5;
+      i===0?cx.moveTo(px,py):cx.lineTo(px,py);
+    }
+    cx.stroke();
+    if(showMarkers){
+      cx.strokeStyle=dimC; cx.lineWidth=0.7; cx.setLineDash([3,3]);
+      cx.beginPath(); cx.moveTo(ctr1,yT+12); cx.lineTo(ctr1,yB); cx.stroke();
+      cx.beginPath(); cx.moveTo(ctr2,yT+12); cx.lineTo(ctr2,yB); cx.stroke();
+      cx.setLineDash([]);
+      tiny('目标1',ctr1,yT+10,'center',dk?'rgba(194,192,182,0.5)':'rgba(61,61,58,0.45)');
+      tiny('目标2',ctr2,yT+10,'center',dk?'rgba(194,192,182,0.5)':'rgba(61,61,58,0.45)');
+    }
+  }
+
+  axis(col1L,col1R,row2B,row2T+16);
+  const fmid1=(col1L+col1R)/2;
+  const fSepPx=Math.min((col1R-col1L)*0.38, normSep*15+8);
+  drawPair(fmid1-fSepPx/2, fmid1+fSepPx/2, col1L,col1R,row2T,row2B,row2B-row2T-20,30,tealS,coralS,purpS,true);
+
+  axis(col2L,col2R,row2B,row2T+16);
+  drawPair(c1x,c2x,col2L,col2R,row2T,row2B,row2B-row2T-20,pulseHW,tealS,coralS,purpS,true);
+
+  const ok1=false;
+  function resultBadge(xL,xR,y,good){
+    const bx=(xL+xR)/2, bw2=130;
+    cx.fillStyle=good?greenF:redF;
+    cx.strokeStyle=good?(dk?'#639922':'#3B6D11'):(dk?'#E24B4A':'#A32D2D');
+    cx.lineWidth=0.8;
+    cx.beginPath(); cx.roundRect(bx-bw2/2,y,bw2,24,5); cx.fill(); cx.stroke();
+    cx.fillStyle=good?(dk?'#C0DD97':'#27500A'):(dk?'#F09595':'#791F1F');
+    cx.font='500 11px var(--font-sans,sans-serif)'; cx.textAlign='center';
+    cx.fillText(good?'两峰可辨，目标分离':'两峰融合，无法区分',bx,y+15);
+  }
+
+  const narrowOk=(sepCm>750*1.1);
+  resultBadge(col1L,col1R,row2B+6,narrowOk);
+  resultBadge(col2L,col2R,row2B+6,ok);
+
+  hdr('公式',(W/2),row3T+2);
+  axis(pad,W-pad,row3B,row3T+16);
+
+  const resPoints=[[20,750],[50,300],[100,150],[200,75],[500,30],[1000,15],[1500,10]];
+  const bwMin=20,bwMax=1500;
+  const rMin=10,rMax=750;
+  const plotL=pad+20,plotR=W-pad-20;
+  const plotT=row3T+18,plotB=row3B-14;
+  const plotW=plotR-plotL,plotH=plotB-plotT;
+
+  function bwToX(b){return plotL+(Math.log(b)-Math.log(bwMin))/(Math.log(bwMax)-Math.log(bwMin))*plotW}
+  function resToY(r){return plotB-(Math.log(r)-Math.log(rMin))/(Math.log(rMax)-Math.log(rMin))*plotH}
+
+  cx.strokeStyle=dimC; cx.lineWidth=0.5;
+  [50,100,200,500,1000].forEach(b=>{
+    const x=bwToX(b); cx.beginPath(); cx.moveTo(x,plotT); cx.lineTo(x,plotB); cx.stroke();
+    tiny(b>=1000?'1GHz':b+'M',x,plotB+10);
+  });
+  [10,30,100,300,750].forEach(r=>{
+    const y=resToY(r); cx.beginPath(); cx.moveTo(plotL,y); cx.lineTo(plotR,y); cx.stroke();
+    tiny(r+'cm',plotL-4,y+3,'right');
+  });
+
+  cx.strokeStyle=tealS; cx.lineWidth=2;
+  cx.beginPath();
+  for(let i=0;i<=200;i++){
+    const b=bwMin*Math.pow(bwMax/bwMin,i/200);
+    const r=3e8/(2*b*1e6)*100;
+    const x=bwToX(b), y=resToY(r);
+    i===0?cx.moveTo(x,y):cx.lineTo(x,y);
+  }
+  cx.stroke();
+
+  const curX=bwToX(bwMHz), curY=resToY(resCm);
+  cx.fillStyle=ok?'#639922':'#E24B4A';
+  cx.beginPath(); cx.arc(curX,curY,6,0,Math.PI*2); cx.fill();
+  tiny(bwMHz>=1000?(bwMHz/1000).toFixed(1)+'GHz':bwMHz+'MHz → '+resCm.toFixed(1)+'cm',curX,curY-10,'center',ok?tealS:coralS);
+
+  tiny('带宽',plotR,plotB+10,'right',textC);
+  tiny('Δr',plotL-4,plotT+6,'right',textC);
+  tiny('Δr = c / (2B)',plotL+50,plotT+14,'left',tealS);
+}
+
+['r-bw','r-sep'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+draw();
+window.addEventListener('resize',draw);
+})();
+</script>
