@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #ffffff;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'SF Pro Display','Segoe UI',system-ui,sans-serif;
+}
+svg { width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <!-- Cell fill colors for 7-color frequency reuse -->
+  <pattern id="dots" patternUnits="userSpaceOnUse" width="8" height="8">
+    <circle cx="4" cy="4" r="1" fill="#94a3b8" opacity="0.3"/>
+  </pattern>
+
+  <!-- Glow filters -->
+  <filter id="glow_blue" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur stdDeviation="4" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00000022"/>
+  </filter>
+
+  <!-- Signal wave animation -->
+  <style>
+    .wave1 { animation: pulse 2.4s ease-out infinite; transform-origin: center; }
+    .wave2 { animation: pulse 2.4s ease-out 0.8s infinite; transform-origin: center; }
+    .wave3 { animation: pulse 2.4s ease-out 1.6s infinite; transform-origin: center; }
+    @keyframes pulse {
+      0%   { opacity: 0.8; r: 6px; }
+      100% { opacity: 0; r: 36px; }
+    }
+    .ue-dot { animation: blink 3s ease-in-out infinite alternate; }
+    @keyframes blink { from { opacity: 0.7; } to { opacity: 1; } }
+  </style>
+</defs>
+
+<!-- =============================================
+     7-COLOR FREQUENCY REUSE PALETTE
+     f1=#dbeafe f2=#dcfce7 f3=#fef9c3 f4=#fce7f3 f5=#ffedd5 f6=#ede9fe f7=#cffafe
+============================================= -->
+
+<!-- =============================================
+     HEXAGONAL GRID  (flat-top hexagons)
+     Center (cx,cy), radius R=118
+     Hex corners: for flat-top, angles 0°,60°,120°...
+     dx = R*cos(θ), dy = R*sin(θ)
+     
+     Grid layout: 3 rows of clusters forming a larger honeycomb
+     We'll place 19 hexagons arranged in a honeycomb pattern
+     
+     For flat-top hex with R=118:
+       Width  W = 2R = 236
+       Height H = √3 * R ≈ 204.2
+       Horizontal spacing: 3/2 * R = 177
+       Vertical spacing: H = 204.2
+       Odd-col offset: H/2 = 102.1
+============================================= -->
+
+<!-- Helper: flat-top hex polygon function
+     Points for hex centered at (cx,cy) with radius R=118:
+     (cx+118, cy), (cx+59, cy+102), (cx-59, cy+102),
+     (cx-118, cy), (cx-59, cy-102), (cx+59, cy-102)
+-->
+
+<!-- ===== ROW 0 (top): cols 0,1,2,3  offset y=0 for even, -102 for odd ===== -->
+<!-- We'll build a 5-row honeycomb centered at (800, 450) -->
+
+<!-- 
+  Flat-top hex layout:
+  col spacing: 177
+  row spacing: 204
+  odd col up-shift: 102
+  
+  Center grid: 4 cols x 3 rows  + fringe
+  
+  Let's place centers explicitly for a nice 19-cell layout:
+  
+  R = 116, so:
+  W = 232, 3/2*R = 174, H = 200.7 ≈ 201
+
+  Centers (col, row) -> pixel (x, y):
+  x = 800 + col * 174
+  y = 450 + row * 201 - (col%2==1 ? 100 : 0)
+-->
+
+<!-- 7-color map for 19 cells (standard 7-cell repeat):
+  Cluster A: cells 1-7 using colors 1-7
+  Cluster B: repeat
+-->
+
+<!-- I'll define 19 cells with explicit centers and colors -->
+<!-- Using a compact 19-hex arrangement centered at 800,450 -->
+
+<!-- 
+  19 hex centers (flat-top, R=110):
+  dx_col = 165 (3/2 * 110)
+  dy_row = 190.5 (sqrt(3)*110)
+  odd_col_shift = 95.3 (dy_row/2)
+  
+  Layout: 
+  col -2: row 0,1,2     (3 cells)
+  col -1: row -1,0,1,2  (no, let me do standard ring layout)
+  
+  Actually let me just define centers for a visually nice arrangement:
+  Ring 0: (0,0)  -> 1 cell
+  Ring 1: 6 cells around center
+  Ring 2: 12 cells around that
+  Total: 19
+  
+  For flat-top hex grid, axial coordinates (q,r):
+  pixel_x = R * (3/2 * q)
+  pixel_y = R * (sqrt(3)/2 * q + sqrt(3) * r)
+-->
+
+<!-- Let's just compute and hard-code 19 hex centers -->
+<!-- R=110, cx=800, cy=450 -->
+<!-- Axial to pixel (flat-top): x = 110*(1.5*q), y = 110*(sqrt3/2*q + sqrt3*r) -->
+<!-- sqrt3 = 1.7321, sqrt3/2 = 0.8660 -->
+<!-- Hex corners (flat-top, relative to center): 
+     (110,0),(55,95.3),(-55,95.3),(-110,0),(-55,-95.3),(55,-95.3) -->
+
+<g transform="translate(800,450)">
+
+<!-- ===========================
+  RING 2 (outer 12 cells) 
+=========================== -->
+<!-- q=2,r=0  color f2 -->
+<polygon points="440,0 385,95 275,95 220,0 275,-95 385,-95"
+  fill="#dcfce7" stroke="#86efac" stroke-width="2" opacity="0.85"/>
+<!-- q=1,r=1  color f3 -->
+<polygon points="275,95 220,190 110,190 55,95 110,0 220,0"
+  fill="#fef9c3" stroke="#fde047" stroke-width="2" opacity="0.85"/>
+<!-- q=0,r=2  color f4 -->
+<polygon points="110,190 55,285 -55,285 -110,190 -55,95 55,95"
+  fill="#fce7f3" stroke="#f9a8d4" stroke-width="2" opacity="0.85"/>
+<!-- q=-1,r=2  color f5 -->
+<polygon points="-55,95 -110,190 -220,190 -275,95 -220,0 -110,0"
+  fill="#ffedd5" stroke="#fdba74" stroke-width="2" opacity="0.85"/>
+<!-- q=-2,r=1  color f6 -->
+<polygon points="-220,0 -275,95 -385,95 -440,0 -385,-95 -275,-95"
+  fill="#ede9fe" stroke="#c4b5fd" stroke-width="2" opacity="0.85"/>
+<!-- q=-2,r=0  color f7 → actually q=-2,r=1 above; let me redo ring 2 properly -->
+
+<!-- Let me redo this properly with correct axial coords -->
+<!-- Ring 2 neighbors of (0,0): 6 directions * 2 steps = 12 cells -->
+<!-- Directions: (1,0),(0,1),(-1,1),(-1,0),(0,-1),(1,-1) -->
+<!-- Ring 2 cells: start at (2,0) and rotate -->
+<!-- (2,0),(1,1),(0,2),(-1,2),(-2,2) wait... -->
+<!-- Standard ring 2: (2,0),(1,1),(0,2),(-1,2),(-2,1),(-2,0),(-1,-1),(0,-2),(1,-2),(2,-2),(2,-1),(1,0)? no -->
+
+<!-- Let me just place hexagons visually with column/row approach -->
+<!-- I'll use a simpler flat-top approach: place in a 5x4 grid pattern -->
+
+</g>
+
+<!-- RESTART with a clean column/row approach -->
+<!-- flat-top hex: col spacing = 165, row spacing = 191, odd-col-shift = 95.5 -->
+<!-- 
+  I'll place a 19-hex arrangement:
+  Grid position (c,r) -> pixel:
+    x = 800 + (c - 2) * 165
+    y = 450 + (r - 2) * 191 + (c%2 == 1 ? 95 : 0) ... 
+    
+  Actually let me just hard-code 19 hexagon centers for the most readable result.
+-->
+
+<!-- Hexagon definition macro (flat-top, R=110):
+     Corners relative to center:
+     (110,0), (55,95), (-55,95), (-110,0), (-55,-95), (55,-95) -->
+
+<!-- 
+  19 cell centers arranged in a honeycomb:
+  I'll use a 4-wide, variable-height grid.
+  
+  Col 0 (x=470): rows at y = 164, 355, 546, 737
+  Col 1 (x=635): rows at y = 259, 450, 641
+  Col 2 (x=800): rows at y = 164, 355, 546, 737
+  Col 3 (x=965): rows at y = 259, 450, 641
+  Col 4 (x=1130): rows at y = 164, 355, 546, 737
+  
+  5 cols total = 4+3+4+3+4 = 18... 
+  Let me do 3+4+5+4+3 = 19:
+  
+  Col 0 (x=470): 3 cells: y=259,450,641
+  Col 1 (x=635): 4 cells: y=164,355,546,737
+  Col 2 (x=800): 5 cells: y=68,259,450,641,832  -- too spread
+  
+  Let me use R=95, so:
+  col_dx = 142, row_dy = 164, odd_shift = 82
+  
+  Col 0 (x=516): 3: y=290,454,618
+  Col 1 (x=658): 4: y=208,372,536,700
+  Col 2 (x=800): 5: y=126,290,454,618,782
+  Col 3 (x=942): 4: y=208,372,536,700
+  Col 4 (x=1084): 3: y=290,454,618
+  
+  Total = 3+4+5+4+3 = 19 ✓
+  
+  7-color reuse pattern (assign colors 1-7 in order):
+  c0: 1,2,3
+  c1: 4,5,6,7
+  c2: 1,2,3,4,5
+  c3: 6,7,1,2
+  c4: 3,4,5
+-->
+
+<!-- Hex flat-top R=95 corners: (95,0),(47.5,82.3),(-47.5,82.3),(-95,0),(-47.5,-82.3),(47.5,-82.3) -->
+<!-- I'll round to (95,0),(48,82),(-48,82),(-95,0),(-48,-82),(48,-82) -->
+
+<!-- Color palette for 7-group frequency reuse -->
+<!-- f1=blue, f2=green, f3=yellow, f4=pink, f5=orange, f6=purple, f7=cyan -->
+<!-- Stroke colors slightly darker -->
+
+<!-- ===== COL 0 (x=516) ===== -->
+<!-- Cell (0,0): f1 blue, center (516,290) -->
+<g>
+  <polygon points="611,290 563,372 468,372 421,290 468,208 563,208"
+    fill="#dbeafe" stroke="#93c5fd" stroke-width="2.2"/>
+  <!-- Base station -->
+  <line x1="516" y1="278" x2="516" y2="302" stroke="#1d4ed8" stroke-width="2.5"/>
+  <path d="M506,284 Q516,274 526,284" fill="none" stroke="#1d4ed8" stroke-width="2"/>
+  <path d="M500,290 Q516,276 532,290" fill="none" stroke="#1d4ed8" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="513,302 519,302 521,312 511,312" fill="#1d4ed8"/>
+  <rect x="509" y="312" width="14" height="3" rx="1" fill="#1d4ed8" opacity="0.5"/>
+  <!-- Coverage signal rings -->
+  <circle cx="516" cy="290" r="8" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0" class="wave1"/>
+  <circle cx="516" cy="290" r="8" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0" class="wave2"/>
+  <!-- Cell label -->
+  <text x="516" y="340" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8" letter-spacing="1">f₁</text>
+  <!-- UE dots -->
+  <circle cx="480" cy="310" r="5" fill="#1d4ed8" opacity="0.7" class="ue-dot"/>
+  <circle cx="550" cy="265" r="5" fill="#1d4ed8" opacity="0.7"/>
+  <circle cx="495" cy="260" r="4" fill="#1d4ed8" opacity="0.5"/>
+</g>
+
+<!-- Cell (0,1): f2 green, center (516,454) -->
+<g>
+  <polygon points="611,454 563,536 468,536 421,454 468,372 563,372"
+    fill="#dcfce7" stroke="#86efac" stroke-width="2.2"/>
+  <line x1="516" y1="442" x2="516" y2="466" stroke="#15803d" stroke-width="2.5"/>
+  <path d="M506,448 Q516,438 526,448" fill="none" stroke="#15803d" stroke-width="2"/>
+  <path d="M500,454 Q516,440 532,454" fill="none" stroke="#15803d" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="513,466 519,466 521,476 511,476" fill="#15803d"/>
+  <rect x="509" y="476" width="14" height="3" rx="1" fill="#15803d" opacity="0.5"/>
+  <text x="516" y="504" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">f₂</text>
+  <circle cx="548" cy="430" r="5" fill="#15803d" opacity="0.7"/>
+  <circle cx="484" cy="470" r="5" fill="#15803d" opacity="0.7" class="ue-dot"/>
+  <circle cx="540" cy="478" r="4" fill="#15803d" opacity="0.5"/>
+</g>
+
+<!-- Cell (0,2): f3 yellow, center (516,618) -->
+<g>
+  <polygon points="611,618 563,700 468,700 421,618 468,536 563,536"
+    fill="#fef9c3" stroke="#fde047" stroke-width="2.2"/>
+  <line x1="516" y1="606" x2="516" y2="630" stroke="#854d0e" stroke-width="2.5"/>
+  <path d="M506,612 Q516,602 526,612" fill="none" stroke="#854d0e" stroke-width="2"/>
+  <path d="M500,618 Q516,604 532,618" fill="none" stroke="#854d0e" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="513,630 519,630 521,640 511,640" fill="#854d0e"/>
+  <rect x="509" y="640" width="14" height="3" rx="1" fill="#854d0e" opacity="0.5"/>
+  <text x="516" y="668" text-anchor="middle" font-size="11" font-weight="700" fill="#854d0e" letter-spacing="1">f₃</text>
+  <circle cx="480" cy="596" r="5" fill="#854d0e" opacity="0.7"/>
+  <circle cx="552" cy="638" r="5" fill="#854d0e" opacity="0.7" class="ue-dot"/>
+</g>
+
+<!-- ===== COL 1 (x=658) odd col, shift up 82 ===== -->
+<!-- Cell (1,0): f4 pink, center (658,208) -->
+<g>
+  <polygon points="753,208 705,290 610,290 563,208 610,126 705,126"
+    fill="#fce7f3" stroke="#f9a8d4" stroke-width="2.2"/>
+  <line x1="658" y1="196" x2="658" y2="220" stroke="#9d174d" stroke-width="2.5"/>
+  <path d="M648,202 Q658,192 668,202" fill="none" stroke="#9d174d" stroke-width="2"/>
+  <path d="M642,208 Q658,194 674,208" fill="none" stroke="#9d174d" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="655,220 661,220 663,230 653,230" fill="#9d174d"/>
+  <rect x="651" y="230" width="14" height="3" rx="1" fill="#9d174d" opacity="0.5"/>
+  <text x="658" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#9d174d" letter-spacing="1">f₄</text>
+  <circle cx="628" cy="185" r="5" fill="#9d174d" opacity="0.7"/>
+  <circle cx="688" cy="228" r="5" fill="#9d174d" opacity="0.7" class="ue-dot"/>
+  <circle cx="640" cy="240" r="4" fill="#9d174d" opacity="0.5"/>
+</g>
+
+<!-- Cell (1,1): f5 orange, center (658,372) -->
+<g>
+  <polygon points="753,372 705,454 610,454 563,372 610,290 705,290"
+    fill="#ffedd5" stroke="#fdba74" stroke-width="2.2"/>
+  <line x1="658" y1="360" x2="658" y2="384" stroke="#9a3412" stroke-width="2.5"/>
+  <path d="M648,366 Q658,356 668,366" fill="none" stroke="#9a3412" stroke-width="2"/>
+  <path d="M642,372 Q658,358 674,372" fill="none" stroke="#9a3412" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="655,384 661,384 663,394 653,394" fill="#9a3412"/>
+  <rect x="651" y="394" width="14" height="3" rx="1" fill="#9a3412" opacity="0.5"/>
+  <text x="658" y="422" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412" letter-spacing="1">f₅</text>
+  <circle cx="692" cy="352" r="5" fill="#9a3412" opacity="0.7" class="ue-dot"/>
+  <circle cx="626" cy="395" r="5" fill="#9a3412" opacity="0.7"/>
+  <circle cx="680" cy="400" r="4" fill="#9a3412" opacity="0.5"/>
+</g>
+
+<!-- Cell (1,2): f6 purple, center (658,536) -->
+<g>
+  <polygon points="753,536 705,618 610,618 563,536 610,454 705,454"
+    fill="#ede9fe" stroke="#c4b5fd" stroke-width="2.2"/>
+  <line x1="658" y1="524" x2="658" y2="548" stroke="#5b21b6" stroke-width="2.5"/>
+  <path d="M648,530 Q658,520 668,530" fill="none" stroke="#5b21b6" stroke-width="2"/>
+  <path d="M642,536 Q658,522 674,536" fill="none" stroke="#5b21b6" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="655,548 661,548 663,558 653,558" fill="#5b21b6"/>
+  <rect x="651" y="558" width="14" height="3" rx="1" fill="#5b21b6" opacity="0.5"/>
+  <text x="658" y="586" text-anchor="middle" font-size="11" font-weight="700" fill="#5b21b6" letter-spacing="1">f₆</text>
+  <circle cx="626" cy="515" r="5" fill="#5b21b6" opacity="0.7"/>
+  <circle cx="690" cy="558" r="5" fill="#5b21b6" opacity="0.7" class="ue-dot"/>
+</g>
+
+<!-- Cell (1,3): f7 cyan, center (658,700) -->
+<g>
+  <polygon points="753,700 705,782 610,782 563,700 610,618 705,618"
+    fill="#cffafe" stroke="#67e8f9" stroke-width="2.2"/>
+  <line x1="658" y1="688" x2="658" y2="712" stroke="#0e7490" stroke-width="2.5"/>
+  <path d="M648,694 Q658,684 668,694" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <path d="M642,700 Q658,686 674,700" fill="none" stroke="#0e7490" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="655,712 661,712 663,722 653,722" fill="#0e7490"/>
+  <rect x="651" y="722" width="14" height="3" rx="1" fill="#0e7490" opacity="0.5"/>
+  <text x="658" y="750" text-anchor="middle" font-size="11" font-weight="700" fill="#0e7490" letter-spacing="1">f₇</text>
+  <circle cx="686" cy="678" r="5" fill="#0e7490" opacity="0.7" class="ue-dot"/>
+  <circle cx="628" cy="720" r="5" fill="#0e7490" opacity="0.7"/>
+</g>
+
+<!-- ===== COL 2 (x=800) center column ===== -->
+<!-- Cell (2,0): f1, center (800,126) -->
+<g>
+  <polygon points="895,126 847,208 752,208 705,126 752,44 847,44"
+    fill="#dbeafe" stroke="#93c5fd" stroke-width="2.2"/>
+  <line x1="800" y1="114" x2="800" y2="138" stroke="#1d4ed8" stroke-width="2.5"/>
+  <path d="M790,120 Q800,110 810,120" fill="none" stroke="#1d4ed8" stroke-width="2"/>
+  <path d="M784,126 Q800,112 816,126" fill="none" stroke="#1d4ed8" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="797,138 803,138 805,148 795,148" fill="#1d4ed8"/>
+  <rect x="793" y="148" width="14" height="3" rx="1" fill="#1d4ed8" opacity="0.5"/>
+  <text x="800" y="176" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8" letter-spacing="1">f₁</text>
+  <circle cx="770" cy="105" r="5" fill="#1d4ed8" opacity="0.7" class="ue-dot"/>
+  <circle cx="832" cy="148" r="5" fill="#1d4ed8" opacity="0.7"/>
+</g>
+
+<!-- Cell (2,1): f2, center (800,290) — CENTER CELL (highlighted) -->
+<g>
+  <polygon points="895,290 847,372 752,372 705,290 752,208 847,208"
+    fill="#dcfce7" stroke="#22c55e" stroke-width="3"/>
+  <!-- Highlighted: this is the "home cell" -->
+  <line x1="800" y1="272" x2="800" y2="308" stroke="#15803d" stroke-width="3"/>
+  <path d="M787,282 Q800,268 813,282" fill="none" stroke="#15803d" stroke-width="2.5"/>
+  <path d="M779,290 Q800,272 821,290" fill="none" stroke="#15803d" stroke-width="2"/>
+  <path d="M771,298 Q800,276 829,298" fill="none" stroke="#15803d" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="796,308 804,308 807,322 793,322" fill="#15803d"/>
+  <rect x="792" y="322" width="16" height="4" rx="2" fill="#15803d" opacity="0.5"/>
+  <!-- Pulsing signal rings for center cell -->
+  <circle cx="800" cy="290" r="10" fill="none" stroke="#16a34a" stroke-width="1.5" class="wave1"/>
+  <circle cx="800" cy="290" r="10" fill="none" stroke="#16a34a" stroke-width="1.5" class="wave2"/>
+  <circle cx="800" cy="290" r="10" fill="none" stroke="#16a34a" stroke-width="1.5" class="wave3"/>
+  <text x="800" y="350" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">f₂</text>
+  <!-- More UEs in center cell -->
+  <circle cx="755" cy="265" r="6" fill="#15803d" opacity="0.8" class="ue-dot"/>
+  <circle cx="845" cy="270" r="6" fill="#15803d" opacity="0.8"/>
+  <circle cx="770" cy="320" r="6" fill="#15803d" opacity="0.8" class="ue-dot"/>
+  <circle cx="833" cy="318" r="6" fill="#15803d" opacity="0.8"/>
+  <circle cx="800" cy="250" r="5" fill="#15803d" opacity="0.6"/>
+</g>
+
+<!-- Cell (2,2): f3, center (800,454) -->
+<g>
+  <polygon points="895,454 847,536 752,536 705,454 752,372 847,372"
+    fill="#fef9c3" stroke="#fde047" stroke-width="2.2"/>
+  <line x1="800" y1="442" x2="800" y2="466" stroke="#854d0e" stroke-width="2.5"/>
+  <path d="M790,448 Q800,438 810,448" fill="none" stroke="#854d0e" stroke-width="2"/>
+  <path d="M784,454 Q800,440 816,454" fill="none" stroke="#854d0e" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="797,466 803,466 805,476 795,476" fill="#854d0e"/>
+  <rect x="793" y="476" width="14" height="3" rx="1" fill="#854d0e" opacity="0.5"/>
+  <text x="800" y="514" text-anchor="middle" font-size="11" font-weight="700" fill="#854d0e" letter-spacing="1">f₃</text>
+  <circle cx="764" cy="434" r="5" fill="#854d0e" opacity="0.7"/>
+  <circle cx="836" cy="476" r="5" fill="#854d0e" opacity="0.7" class="ue-dot"/>
+  <circle cx="768" cy="480" r="4" fill="#854d0e" opacity="0.5"/>
+</g>
+
+<!-- Cell (2,3): f4, center (800,618) -->
+<g>
+  <polygon points="895,618 847,700 752,700 705,618 752,536 847,536"
+    fill="#fce7f3" stroke="#f9a8d4" stroke-width="2.2"/>
+  <line x1="800" y1="606" x2="800" y2="630" stroke="#9d174d" stroke-width="2.5"/>
+  <path d="M790,612 Q800,602 810,612" fill="none" stroke="#9d174d" stroke-width="2"/>
+  <path d="M784,618 Q800,604 816,618" fill="none" stroke="#9d174d" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="797,630 803,630 805,640 795,640" fill="#9d174d"/>
+  <rect x="793" y="640" width="14" height="3" rx="1" fill="#9d174d" opacity="0.5"/>
+  <text x="800" y="670" text-anchor="middle" font-size="11" font-weight="700" fill="#9d174d" letter-spacing="1">f₄</text>
+  <circle cx="830" cy="598" r="5" fill="#9d174d" opacity="0.7" class="ue-dot"/>
+  <circle cx="766" cy="640" r="5" fill="#9d174d" opacity="0.7"/>
+</g>
+
+<!-- Cell (2,4): f5, center (800,782) -->
+<g>
+  <polygon points="895,782 847,864 752,864 705,782 752,700 847,700"
+    fill="#ffedd5" stroke="#fdba74" stroke-width="2.2"/>
+  <line x1="800" y1="770" x2="800" y2="794" stroke="#9a3412" stroke-width="2.5"/>
+  <path d="M790,776 Q800,766 810,776" fill="none" stroke="#9a3412" stroke-width="2"/>
+  <path d="M784,782 Q800,768 816,782" fill="none" stroke="#9a3412" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="797,794 803,794 805,804 795,804" fill="#9a3412"/>
+  <rect x="793" y="804" width="14" height="3" rx="1" fill="#9a3412" opacity="0.5"/>
+  <text x="800" y="834" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412" letter-spacing="1">f₅</text>
+  <circle cx="764" cy="762" r="5" fill="#9a3412" opacity="0.7"/>
+  <circle cx="836" cy="800" r="5" fill="#9a3412" opacity="0.7" class="ue-dot"/>
+</g>
+
+<!-- ===== COL 3 (x=942) odd col shift up 82 ===== -->
+<!-- Cell (3,0): f6, center (942,208) -->
+<g>
+  <polygon points="1037,208 989,290 894,290 847,208 894,126 989,126"
+    fill="#ede9fe" stroke="#c4b5fd" stroke-width="2.2"/>
+  <line x1="942" y1="196" x2="942" y2="220" stroke="#5b21b6" stroke-width="2.5"/>
+  <path d="M932,202 Q942,192 952,202" fill="none" stroke="#5b21b6" stroke-width="2"/>
+  <path d="M926,208 Q942,194 958,208" fill="none" stroke="#5b21b6" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="939,220 945,220 947,230 937,230" fill="#5b21b6"/>
+  <rect x="935" y="230" width="14" height="3" rx="1" fill="#5b21b6" opacity="0.5"/>
+  <text x="942" y="258" text-anchor="middle" font-size="11" font-weight="700" fill="#5b21b6" letter-spacing="1">f₆</text>
+  <circle cx="912" cy="188" r="5" fill="#5b21b6" opacity="0.7" class="ue-dot"/>
+  <circle cx="972" cy="230" r="5" fill="#5b21b6" opacity="0.7"/>
+</g>
+
+<!-- Cell (3,1): f7, center (942,372) -->
+<g>
+  <polygon points="1037,372 989,454 894,454 847,372 894,290 989,290"
+    fill="#cffafe" stroke="#67e8f9" stroke-width="2.2"/>
+  <line x1="942" y1="360" x2="942" y2="384" stroke="#0e7490" stroke-width="2.5"/>
+  <path d="M932,366 Q942,356 952,366" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <path d="M926,372 Q942,358 958,372" fill="none" stroke="#0e7490" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="939,384 945,384 947,394 937,394" fill="#0e7490"/>
+  <rect x="935" y="394" width="14" height="3" rx="1" fill="#0e7490" opacity="0.5"/>
+  <text x="942" y="422" text-anchor="middle" font-size="11" font-weight="700" fill="#0e7490" letter-spacing="1">f₇</text>
+  <circle cx="976" cy="352" r="5" fill="#0e7490" opacity="0.7"/>
+  <circle cx="910" cy="394" r="5" fill="#0e7490" opacity="0.7" class="ue-dot"/>
+  <circle cx="965" cy="398" r="4" fill="#0e7490" opacity="0.5"/>
+</g>
+
+<!-- Cell (3,2): f1, center (942,536) -->
+<g>
+  <polygon points="1037,536 989,618 894,618 847,536 894,454 989,454"
+    fill="#dbeafe" stroke="#93c5fd" stroke-width="2.2"/>
+  <line x1="942" y1="524" x2="942" y2="548" stroke="#1d4ed8" stroke-width="2.5"/>
+  <path d="M932,530 Q942,520 952,530" fill="none" stroke="#1d4ed8" stroke-width="2"/>
+  <path d="M926,536 Q942,522 958,536" fill="none" stroke="#1d4ed8" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="939,548 945,548 947,558 937,558" fill="#1d4ed8"/>
+  <rect x="935" y="558" width="14" height="3" rx="1" fill="#1d4ed8" opacity="0.5"/>
+  <text x="942" y="586" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8" letter-spacing="1">f₁</text>
+  <circle cx="908" cy="515" r="5" fill="#1d4ed8" opacity="0.7" class="ue-dot"/>
+  <circle cx="976" cy="558" r="5" fill="#1d4ed8" opacity="0.7"/>
+</g>
+
+<!-- Cell (3,3): f2, center (942,700) -->
+<g>
+  <polygon points="1037,700 989,782 894,782 847,700 894,618 989,618"
+    fill="#dcfce7" stroke="#86efac" stroke-width="2.2"/>
+  <line x1="942" y1="688" x2="942" y2="712" stroke="#15803d" stroke-width="2.5"/>
+  <path d="M932,694 Q942,684 952,694" fill="none" stroke="#15803d" stroke-width="2"/>
+  <path d="M926,700 Q942,686 958,700" fill="none" stroke="#15803d" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="939,712 945,712 947,722 937,722" fill="#15803d"/>
+  <rect x="935" y="722" width="14" height="3" rx="1" fill="#15803d" opacity="0.5"/>
+  <text x="942" y="750" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d" letter-spacing="1">f₂</text>
+  <circle cx="976" cy="680" r="5" fill="#15803d" opacity="0.7"/>
+  <circle cx="908" cy="720" r="5" fill="#15803d" opacity="0.7" class="ue-dot"/>
+</g>
+
+<!-- ===== COL 4 (x=1084) ===== -->
+<!-- Cell (4,0): f3, center (1084,290) -->
+<g>
+  <polygon points="1179,290 1131,372 1036,372 989,290 1036,208 1131,208"
+    fill="#fef9c3" stroke="#fde047" stroke-width="2.2"/>
+  <line x1="1084" y1="278" x2="1084" y2="302" stroke="#854d0e" stroke-width="2.5"/>
+  <path d="M1074,284 Q1084,274 1094,284" fill="none" stroke="#854d0e" stroke-width="2"/>
+  <path d="M1068,290 Q1084,276 1100,290" fill="none" stroke="#854d0e" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="1081,302 1087,302 1089,312 1079,312" fill="#854d0e"/>
+  <rect x="1077" y="312" width="14" height="3" rx="1" fill="#854d0e" opacity="0.5"/>
+  <text x="1084" y="340" text-anchor="middle" font-size="11" font-weight="700" fill="#854d0e" letter-spacing="1">f₃</text>
+  <circle cx="1054" cy="268" r="5" fill="#854d0e" opacity="0.7" class="ue-dot"/>
+  <circle cx="1116" cy="310" r="5" fill="#854d0e" opacity="0.7"/>
+</g>
+
+<!-- Cell (4,1): f4, center (1084,454) -->
+<g>
+  <polygon points="1179,454 1131,536 1036,536 989,454 1036,372 1131,372"
+    fill="#fce7f3" stroke="#f9a8d4" stroke-width="2.2"/>
+  <line x1="1084" y1="442" x2="1084" y2="466" stroke="#9d174d" stroke-width="2.5"/>
+  <path d="M1074,448 Q1084,438 1094,448" fill="none" stroke="#9d174d" stroke-width="2"/>
+  <path d="M1068,454 Q1084,440 1100,454" fill="none" stroke="#9d174d" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="1081,466 1087,466 1089,476 1079,476" fill="#9d174d"/>
+  <rect x="1077" y="476" width="14" height="3" rx="1" fill="#9d174d" opacity="0.5"/>
+  <text x="1084" y="504" text-anchor="middle" font-size="11" font-weight="700" fill="#9d174d" letter-spacing="1">f₄</text>
+  <circle cx="1118" cy="434" r="5" fill="#9d174d" opacity="0.7" class="ue-dot"/>
+  <circle cx="1050" cy="476" r="5" fill="#9d174d" opacity="0.7"/>
+  <circle cx="1100" cy="478" r="4" fill="#9d174d" opacity="0.5"/>
+</g>
+
+<!-- Cell (4,2): f5, center (1084,618) -->
+<g>
+  <polygon points="1179,618 1131,700 1036,700 989,618 1036,536 1131,536"
+    fill="#ffedd5" stroke="#fdba74" stroke-width="2.2"/>
+  <line x1="1084" y1="606" x2="1084" y2="630" stroke="#9a3412" stroke-width="2.5"/>
+  <path d="M1074,612 Q1084,602 1094,612" fill="none" stroke="#9a3412" stroke-width="2"/>
+  <path d="M1068,618 Q1084,604 1100,618" fill="none" stroke="#9a3412" stroke-width="1.5" opacity="0.6"/>
+  <polygon points="1081,630 1087,630 1089,640 1079,640" fill="#9a3412"/>
+  <rect x="1077" y="640" width="14" height="3" rx="1" fill="#9a3412" opacity="0.5"/>
+  <text x="1084" y="668" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412" letter-spacing="1">f₅</text>
+  <circle cx="1050" cy="598" r="5" fill="#9a3412" opacity="0.7"/>
+  <circle cx="1118" cy="638" r="5" fill="#9a3412" opacity="0.7" class="ue-dot"/>
+</g>
+
+<!-- =============================================
+     HANDOVER ARROW (between cell (2,1) and (3,1))
+     from UE near border of green and cyan cells
+============================================= -->
+<!-- Handover indicator -->
+<g>
+  <line x1="845" y1="305" x2="895" y2="325" stroke="#374151" stroke-width="2" stroke-dasharray="6,4"
+    marker-end="url(#a_gray)"/>
+  <rect x="836" y="290" width="70" height="18" rx="5" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+  <text x="871" y="302" text-anchor="middle" font-size="10" font-weight="600" fill="#374151">切换 Handover</text>
+</g>
+
+<!-- =============================================
+     BACKHAUL line from eNBs to core network
+============================================= -->
+<!-- Collective backhaul representation on right side -->
+<rect x="1195" y="380" width="160" height="160" rx="14" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="1275" y="420" text-anchor="middle" font-size="13" font-weight="800" fill="#334155">核心网</text>
+<text x="1275" y="440" text-anchor="middle" font-size="10" fill="#64748b">EPC / 5GC</text>
+<line x1="1275" y1="453" x2="1275" y2="465" stroke="#94a3b8" stroke-width="1"/>
+<text x="1275" y="480" text-anchor="middle" font-size="10" fill="#6b7280">MME · SGW</text>
+<text x="1275" y="496" text-anchor="middle" font-size="10" fill="#6b7280">PGW · HSS</text>
+<text x="1275" y="512" text-anchor="middle" font-size="10" fill="#6b7280">PCRF</text>
+
+<!-- Backhaul lines from col4 cells to core -->
+<line x1="1179" y1="350" x2="1200" y2="420" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#a_gray)"/>
+<line x1="1179" y1="454" x2="1200" y2="450" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a_gray)" marker-start="url(#a_gray_r)"/>
+<line x1="1179" y1="560" x2="1200" y2="490" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#a_gray)"/>
+<rect x="1165" y="398" width="50" height="16" rx="4" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+<text x="1190" y="410" text-anchor="middle" font-size="10" font-weight="600" fill="#475569">S1 回传</text>
+
+<!-- =============================================
+     CLUSTER BOUNDARY (7-cell reuse cluster)
+============================================= -->
+<!-- Dashed outline around the 7-cell cluster in center -->
+<!-- cluster = cell (2,1) + its 6 neighbors: (1,0),(1,1),(2,0),(3,0),(3,1),(2,2) -->
+<polygon 
+  points="800,44 989,126 1037,372 942,454 847,372 705,290 705,126"
+  fill="none" stroke="#475569" stroke-width="2.5" stroke-dasharray="10,6" opacity="0.55"/>
+<rect x="812" y="56" width="100" height="20" rx="5" fill="#ffffff" stroke="#475569" stroke-width="1" opacity="0.9"/>
+<text x="862" y="70" text-anchor="middle" font-size="11" font-weight="700" fill="#374151">复用簇 N=7</text>
+
+<!-- =============================================
+     LEGEND  (bottom strip)
+============================================= -->
+<rect x="0" y="858" width="1600" height="42" fill="#f8fafc"/>
+<line x1="0" y1="858" x2="1600" y2="858" stroke="#e2e8f0" stroke-width="1"/>
+
+<!-- Legend items -->
+<!-- antenna icon -->
+<line x1="52" y1="879" x2="52" y2="891" stroke="#374151" stroke-width="2"/>
+<path d="M47,882 Q52,877 57,882" fill="none" stroke="#374151" stroke-width="1.5"/>
+<polygon points="50,891 54,891 56,896 48,896" fill="#374151" opacity="0.6"/>
+<text x="66" y="884" font-size="11" fill="#374151" font-weight="600">基站 eNodeB</text>
+
+<!-- UE dot -->
+<circle cx="200" cy="879" r="6" fill="#374151" opacity="0.7"/>
+<text x="215" y="884" font-size="11" fill="#374151" font-weight="600">用户终端 UE</text>
+
+<!-- Frequency colors -->
+<rect x="340" y="871" width="14" height="14" rx="3" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+<text x="360" y="882" font-size="11" fill="#374151">f₁</text>
+<rect x="392" y="871" width="14" height="14" rx="3" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+<text x="412" y="882" font-size="11" fill="#374151">f₂</text>
+<rect x="444" y="871" width="14" height="14" rx="3" fill="#fef9c3" stroke="#fde047" stroke-width="1.5"/>
+<text x="464" y="882" font-size="11" fill="#374151">f₃</text>
+<rect x="496" y="871" width="14" height="14" rx="3" fill="#fce7f3" stroke="#f9a8d4" stroke-width="1.5"/>
+<text x="516" y="882" font-size="11" fill="#374151">f₄</text>
+<rect x="548" y="871" width="14" height="14" rx="3" fill="#ffedd5" stroke="#fdba74" stroke-width="1.5"/>
+<text x="568" y="882" font-size="11" fill="#374151">f₅</text>
+<rect x="600" y="871" width="14" height="14" rx="3" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+<text x="620" y="882" font-size="11" fill="#374151">f₆</text>
+<rect x="652" y="871" width="14" height="14" rx="3" fill="#cffafe" stroke="#67e8f9" stroke-width="1.5"/>
+<text x="672" y="882" font-size="11" fill="#374151">f₇ — 7 频率复用组</text>
+
+<!-- Handover legend -->
+<line x1="870" y1="879" x2="906" y2="879" stroke="#374151" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#a_gray)"/>
+<text x="916" y="884" font-size="11" fill="#374151" font-weight="600">切换 Handover</text>
+
+<!-- Cluster legend -->
+<line x1="1080" y1="879" x2="1116" y2="879" stroke="#475569" stroke-width="2" stroke-dasharray="7,4" opacity="0.7" marker-end="url(#a_gray)"/>
+<text x="1126" y="884" font-size="11" fill="#374151" font-weight="600">复用簇边界（N=7）</text>
+
+<!-- Backhaul legend -->
+<line x1="1360" y1="879" x2="1396" y2="879" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#a_gray)"/>
+<text x="1406" y="884" font-size="11" fill="#374151" font-weight="600">S1 回传链路</text>
+
+</svg>
+</body>
+</html>
