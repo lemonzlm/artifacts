@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>奈奎斯特采样定理</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#080c14;--panel:#0d1520;--panel2:#111c2e;
+    --blue:#3b82f6;--purple:#a78bfa;--yellow:#fbbf24;
+    --green:#4ade80;--red:#f87171;--orange:#fb923c;
+    --text:#e2e8f0;--muted:#64748b;--dim:#334155;
+  }
+  body{background:var(--bg);color:var(--text);font-family:'Noto Sans SC',sans-serif;
+    min-height:100vh;padding:24px 20px;line-height:1.5}
+  
+  .page-title{
+    font-family:'JetBrains Mono',monospace;font-size:1.05rem;
+    color:var(--blue);letter-spacing:2px;text-align:center;margin-bottom:4px;
+  }
+  .page-sub{text-align:center;color:var(--muted);font-size:0.75rem;margin-bottom:20px;}
+
+  /* Theorem box */
+  .theorem{
+    background:linear-gradient(135deg,#0f1e3a,#0a1628);
+    border:1px solid #1d4ed8;border-radius:12px;
+    padding:16px 20px;margin-bottom:20px;
+    display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
+  }
+  .theorem-math{font-family:'JetBrains Mono',monospace;font-size:1.4rem;color:var(--yellow)}
+  .theorem-desc{font-size:0.8rem;color:#93c5fd;line-height:1.6}
+  .theorem-desc span{color:var(--text)}
+
+  /* Controls */
+  .controls{
+    background:var(--panel);border-radius:10px;padding:14px 16px;
+    display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;
+    border:1px solid var(--dim);
+  }
+  .ctrl{display:flex;flex-direction:column;gap:5px;min-width:150px}
+  .ctrl label{font-size:0.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.5px}
+  .ctrl .val{font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:var(--blue);font-weight:600}
+  input[type=range]{width:100%;height:4px;accent-color:var(--blue);cursor:pointer}
+  
+  .nyq-display{
+    background:var(--panel2);border-radius:8px;padding:8px 12px;
+    font-family:'JetBrains Mono',monospace;text-align:center;
+  }
+  .nyq-display .label{font-size:0.65rem;color:var(--muted)}
+  .nyq-display .value{font-size:0.95rem;color:var(--purple);font-weight:700}
+
+  /* Status */
+  .status{
+    border-radius:8px;padding:9px 14px;font-size:0.82rem;
+    font-weight:600;text-align:center;margin-bottom:14px;
+    font-family:'JetBrains Mono',monospace;transition:all .3s;
+  }
+  .s-ok{background:#052e16;color:var(--green);border:1px solid #16a34a}
+  .s-warn{background:#431407;color:var(--orange);border:1px solid #ea580c}
+  .s-bad{background:#2d0606;color:var(--red);border:1px solid #dc2626}
+
+  /* Canvas panels */
+  .panel-label{
+    font-size:0.65rem;color:var(--muted);
+    font-family:'JetBrains Mono',monospace;letter-spacing:1px;
+    text-transform:uppercase;margin-bottom:4px;padding-left:2px;
+  }
+  canvas{
+    display:block;width:100%;border-radius:8px;
+    background:var(--panel);border:1px solid var(--dim);
+  }
+
+  /* Legend */
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:6px 2px 14px;}
+  .leg{display:flex;align-items:center;gap:5px;font-size:0.7rem;color:var(--muted)}
+  .leg-line{width:18px;height:2px;border-radius:1px}
+  .leg-dot{width:8px;height:8px;border-radius:50%}
+
+  /* Case cards */
+  .cases{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .case-card{
+    background:var(--panel);border:2px solid var(--dim);border-radius:8px;
+    padding:10px 8px;text-align:center;cursor:pointer;transition:all .2s;
+  }
+  .case-card:hover{border-color:var(--blue);background:var(--panel2)}
+  .case-card.active{border-color:var(--yellow)!important}
+  .cc-tag{font-size:0.65rem;color:var(--muted);font-family:'JetBrains Mono',monospace}
+  .cc-name{font-size:0.78rem;color:var(--text);font-weight:600;margin:3px 0}
+  .cc-ratio{font-size:0.95rem;font-family:'JetBrains Mono',monospace;font-weight:700}
+
+  /* Explainer */
+  .explainer{
+    background:var(--panel);border-radius:10px;
+    border:1px solid var(--dim);padding:14px 16px;margin-top:14px;
+  }
+  .exp-title{font-size:0.7rem;color:var(--muted);letter-spacing:1px;
+    font-family:'JetBrains Mono',monospace;text-transform:uppercase;margin-bottom:8px}
+  .exp-row{display:flex;justify-content:space-between;font-size:0.78rem;
+    padding:5px 0;border-bottom:1px solid var(--dim);color:#94a3b8}
+  .exp-row:last-child{border-bottom:none}
+  .exp-row span:last-child{font-family:'JetBrains Mono',monospace;color:var(--text)}
+
+  @media(max-width:480px){
+    .controls{gap:12px} .ctrl{min-width:120px}
+    .theorem{grid-template-columns:1fr} .cases{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="page-title">低通信号抽样定理</div>
+<div class="page-sub">Nyquist–Shannon Sampling Theorem · 交互演示</div>
+
+<div class="theorem">
+  <div>
+    <div class="theorem-math">f<sub>s</sub> ≥ 2f<sub>max</sub></div>
+    <div style="margin-top:4px;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#60a5fa">
+      奈奎斯特频率：f<sub>N</sub> = 2f<sub>max</sub>
+    </div>
+  </div>
+  <div class="theorem-desc">
+    采样频率 <span>f<sub>s</sub></span> 至少要是<br>
+    信号最高频率 <span>f<sub>max</sub></span> 的 <span>2倍</span>，<br>
+    才能从样本完整重建原始信号。
+  </div>
+</div>
+
+<div class="controls">
+  <div class="ctrl">
+    <label>信号频率 f<sub>max</sub></label>
+    <input type="range" id="fmax" min="1" max="8" value="3" step="0.5">
+    <div class="val" id="fmax_v">3.0 Hz</div>
+  </div>
+  <div class="ctrl">
+    <label>采样频率 f<sub>s</sub></label>
+    <input type="range" id="fs" min="1" max="32" value="10" step="0.5">
+    <div class="val" id="fs_v">10.0 Hz</div>
+  </div>
+  <div class="nyq-display">
+    <div class="label">奈奎斯特频率</div>
+    <div class="value" id="nyq_v">6.0 Hz</div>
+  </div>
+  <div class="nyq-display">
+    <div class="label">比值 fs / fN</div>
+    <div class="value" id="ratio_v">1.67×</div>
+  </div>
+</div>
+
+<div class="status s-ok" id="status">✅ 满足奈奎斯特条件</div>
+
+<div class="panel-label">时域：连续信号 vs 采样 vs 重建</div>
+<div class="legend">
+  <div class="leg"><div class="leg-line" style="background:#3b82f6;height:3px"></div>原始信号</div>
+  <div class="leg"><div class="leg-dot" style="background:#fbbf24"></div>采样点</div>
+  <div class="leg"><div class="leg-line" style="background:#a78bfa;border-top:2px dashed #a78bfa;height:0;width:18px"></div>重建信号（sinc 插值）</div>
+</div>
+<canvas id="cTime" height="170"></canvas>
+
+<div style="height:14px"></div>
+<div class="panel-label">频域：频谱副本分布（混叠检测）</div>
+<canvas id="cFreq" height="120"></canvas>
+<div class="legend" style="margin-top:6px">
+  <div class="leg"><div class="leg-line" style="background:#3b82f680;height:10px;width:18px;border-radius:2px"></div>基带频谱</div>
+  <div class="leg"><div class="leg-line" style="background:#22c55e50;height:10px;width:18px;border-radius:2px"></div>镜像副本（不重叠）</div>
+  <div class="leg"><div class="leg-line" style="background:#f8717170;height:10px;width:18px;border-radius:2px"></div>混叠区域（重叠 = 失真）</div>
+</div>
+
+<div style="height:10px"></div>
+<div class="cases">
+  <div class="case-card" id="cc0" onclick="setCase(0)">
+    <div class="cc-tag">过采样</div>
+    <div class="cc-name">fs = 4f<sub>max</sub></div>
+    <div class="cc-ratio" style="color:var(--green)">2.0× Nyq</div>
+  </div>
+  <div class="case-card active" id="cc1" onclick="setCase(1)">
+    <div class="cc-tag">临界采样</div>
+    <div class="cc-name">fs = 2f<sub>max</sub></div>
+    <div class="cc-ratio" style="color:var(--orange)">1.0× Nyq</div>
+  </div>
+  <div class="case-card" id="cc2" onclick="setCase(2)">
+    <div class="cc-tag">欠采样 / 混叠</div>
+    <div class="cc-name">fs = 1.2f<sub>max</sub></div>
+    <div class="cc-ratio" style="color:var(--red)">0.6× Nyq</div>
+  </div>
+</div>
+
+<div class="explainer">
+  <div class="exp-title">直觉解释</div>
+  <div class="exp-row"><span>为什么是 2 倍？</span><span>一个周期需最少 2 点（波峰 + 波谷）</span></div>
+  <div class="exp-row"><span>混叠是什么？</span><span>高频信号"伪装"成低频，不可逆</span></div>
+  <div class="exp-row"><span>临界采样风险</span><span>相位偏差会使振幅降至 0</span></div>
+  <div class="exp-row"><span>工程实践</span><span>通常取 fs ≥ 5~10 × f<sub>max</sub>（留余量）</span></div>
+  <div class="exp-row"><span>抗混叠滤波</span><span>采样前先用低通滤波器截断 > f<sub>max</sub> 分量</span></div>
+</div>
+
+<script>
+const fmaxEl=document.getElementById('fmax'), fsEl=document.getElementById('fs');
+let fmax=3, fs=10, activeCase=1;
+
+function sinc(x){return Math.abs(x)<1e-9?1:Math.sin(Math.PI*x)/(Math.PI*x);}
+
+function reconstruct(vals, times, t, rate){
+  let s=0; for(let k=0;k<vals.length;k++) s+=vals[k]*sinc((t-times[k])*rate);
+  return s;
+}
+
+function setCase(i){
+  activeCase=i;
+  [0,1,2].forEach(j=>document.getElementById('cc'+j).classList.toggle('active',j===i));
+  const r=[4,2,1.2][i];
+  fs=Math.round(fmax*r*2)/2;
+  fsEl.value=Math.min(32,fs);
+  draw();
+}
+
+function draw(){
+  fmax=parseFloat(fmaxEl.value);
+  fs=parseFloat(fsEl.value);
+  const nyq=2*fmax, ratio=fs/nyq;
+  document.getElementById('fmax_v').textContent=fmax.toFixed(1)+' Hz';
+  document.getElementById('fs_v').textContent=fs.toFixed(1)+' Hz';
+  document.getElementById('nyq_v').textContent=nyq.toFixed(1)+' Hz';
+  document.getElementById('ratio_v').textContent=ratio.toFixed(2)+'×';
+  const st=document.getElementById('status');
+  if(ratio>=1.5){st.className='status s-ok';st.textContent='✅ 过采样：fs/fN = '+ratio.toFixed(2)+'× — 可完美重建，频谱副本不重叠';}
+  else if(ratio>=1){st.className='status s-warn';st.textContent='⚠️ 临界采样：fs = 2f_max — 理论可行，实用中需防相位误差';}
+  else{st.className='status s-bad';st.textContent='❌ 欠采样（混叠）：fs/fN = '+ratio.toFixed(2)+'× — 频谱重叠，信号失真，无法还原！';}
+  drawTime(); drawFreq();
+}
+
+function drawTime(){
+  const cv=document.getElementById('cTime');
+  const W=cv.offsetWidth||700, H=170;
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#0d1520'; ctx.fillRect(0,0,W,H);
+  const T=2, L=40, R=W-10, cy=H/2, amp=H*0.34;
+  const gw=R-L;
+
+  // grid
+  ctx.strokeStyle='#0f1d30'; ctx.lineWidth=1;
+  for(let y=cy-amp;y<=cy+amp;y+=amp/2){
+    ctx.beginPath(); ctx.moveTo(L,y); ctx.lineTo(R,y); ctx.stroke();
+  }
+  // axes
+  ctx.strokeStyle='#1e3a5f'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(L,cy); ctx.lineTo(R,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L,10); ctx.lineTo(L,H-10); ctx.stroke();
+  // labels
+  ctx.fillStyle='#475569'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='center';
+  ctx.fillText('0',L,cy+14); ctx.fillText('t',R-2,cy+14);
+  ctx.fillText('1s',L+gw/2,cy+14); ctx.fillText('2s',R,cy+14);
+
+  // build samples
+  const sTimes=[], sVals=[];
+  const T_ext=T+2/fs;
+  for(let t=-1/fs;t<=T_ext;t+=1/fs){sTimes.push(t);sVals.push(Math.sin(2*Math.PI*fmax*t));}
+
+  // reconstructed
+  ctx.strokeStyle='#a78bfa'; ctx.lineWidth=1.5; ctx.setLineDash([5,3]);
+  ctx.beginPath();
+  for(let i=0;i<=gw;i++){
+    const t=(i/gw)*T;
+    const y=cy-amp*reconstruct(sVals,sTimes,t,fs);
+    i===0?ctx.moveTo(L+i,y):ctx.lineTo(L+i,y);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // original
+  ctx.strokeStyle='#3b82f6'; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  for(let i=0;i<=gw;i++){
+    const t=(i/gw)*T;
+    const y=cy-amp*Math.sin(2*Math.PI*fmax*t);
+    i===0?ctx.moveTo(L+i,y):ctx.lineTo(L+i,y);
+  }
+  ctx.stroke();
+
+  // sample stems + dots
+  for(let t=0;t<=T+0.001;t+=1/fs){
+    const x=L+(t/T)*gw;
+    if(x<L||x>R) continue;
+    const v=Math.sin(2*Math.PI*fmax*t), y=cy-amp*v;
+    ctx.strokeStyle='#fbbf2450'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x,y); ctx.stroke();
+    ctx.fillStyle='#fbbf24';
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#0d1520'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.stroke();
+  }
+
+  // Ts bracket
+  if(1/fs>0.03&&1/fs<T*0.8){
+    const x2=L+(1/fs/T)*gw;
+    ctx.strokeStyle='#fbbf2480'; ctx.lineWidth=1; ctx.setLineDash([2,2]);
+    const bY=cy-amp-16;
+    ctx.beginPath(); ctx.moveTo(L,bY); ctx.lineTo(x2,bY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#fbbf24'; ctx.font='9px JetBrains Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('Ts=1/fs',(L+x2)/2,bY-4);
+  }
+}
+
+function drawFreq(){
+  const cv=document.getElementById('cFreq');
+  const W=cv.offsetWidth||700, H=120;
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#0d1520'; ctx.fillRect(0,0,W,H);
+
+  const maxF=Math.max(fs*2.2, fmax*5);
+  const L=40, R=W-10, baseY=H-22, topY=18;
+  const ampH=baseY-topY;
+  const sx=f=>L+(f/maxF)*(R-L);
+
+  // axes
+  ctx.strokeStyle='#1e3a5f'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(L,baseY); ctx.lineTo(R,baseY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L,topY-5); ctx.lineTo(L,baseY); ctx.stroke();
+  ctx.fillStyle='#475569'; ctx.font='9px JetBrains Mono,monospace'; ctx.textAlign='center';
+  ctx.fillText('0',L,baseY+13); ctx.fillText('f',R,baseY+13);
+
+  function tri(fCenter, fillColor){
+    const x0=sx(fCenter-fmax), xm=sx(fCenter), x1=sx(fCenter+fmax);
+    if(x1<L||x0>R) return;
+    ctx.fillStyle=fillColor;
+    ctx.beginPath();
+    ctx.moveTo(Math.max(x0,L),baseY);
+    ctx.lineTo(xm, topY);
+    ctx.lineTo(Math.min(x1,R),baseY);
+    ctx.closePath(); ctx.fill();
+  }
+
+  const aliased=fs<2*fmax;
+  // mirror images
+  for(let k=-4;k<=4;k++){
+    if(k===0) continue;
+    const fc=k*fs;
+    tri(fc, aliased?'#f8717145':'#22c55e35');
+  }
+  // baseband
+  tri(0,'#3b82f690');
+
+  // overlap highlight
+  if(aliased){
+    const overlapF=fs-fmax;
+    if(overlapF<fmax){
+      const x0=sx(overlapF), x1=sx(fmax);
+      if(x1>x0){
+        ctx.fillStyle='#f87171aa';
+        ctx.beginPath();
+        // shade overlap triangle
+        ctx.moveTo(sx(overlapF),baseY);
+        ctx.lineTo(sx(fmax),topY+(fmax-overlapF)/fmax*ampH);
+        ctx.lineTo(sx(fmax),baseY);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+
+  // markers
+  const markers=[
+    {f:fmax,c:'#94a3b8',l:'f_max'},
+    {f:2*fmax,c:'#a78bfa',l:'f_N'},
+    {f:fs,c:'#fbbf24',l:'f_s'},
+  ];
+  markers.forEach(({f,c,l})=>{
+    const x=sx(f);
+    if(x<L||x>R) return;
+    ctx.strokeStyle=c+'aa'; ctx.lineWidth=1.2; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(x,topY-5); ctx.lineTo(x,baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=c; ctx.font='9px JetBrains Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(l,x,topY-7);
+  });
+
+  // label
+  ctx.fillStyle='#334155'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='left';
+  ctx.fillText('频域（冲激序列采样 → 频谱以 fs 为间隔重复）',L+2,13);
+  if(aliased){
+    ctx.fillStyle='#f87171'; ctx.font='bold 10px system-ui'; ctx.textAlign='center';
+    ctx.fillText('⚠ 频谱副本重叠 → 混叠失真，不可逆！',W/2,H-6);
+  }
+}
+
+fmaxEl.addEventListener('input',draw);
+fsEl.addEventListener('input',draw);
+draw();
+</script>
+</body>
+</html>
